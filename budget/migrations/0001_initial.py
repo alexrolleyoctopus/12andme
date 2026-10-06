@@ -8,61 +8,170 @@ class Migration(migrations.Migration):
 
     initial = True
 
-    dependencies = [
-    ]
+    dependencies = []
 
     operations = [
         migrations.CreateModel(
-            name='Account',
+            name="Account",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('name', models.CharField(max_length=100, unique=True)),
-                ('primary', models.BooleanField(default=False)),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("name", models.CharField(max_length=100, unique=True)),
+                ("primary", models.BooleanField(default=False)),
             ],
         ),
         migrations.CreateModel(
-            name='YearPlan',
+            name="YearPlan",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('year', models.PositiveIntegerField(unique=True)),
-                ('opening_cents', models.BigIntegerField(default=0, help_text='Primary account balance on 1 January, in cents')),
-                ('closed_through', models.PositiveSmallIntegerField(default=0, help_text='Last completed month: 0–12. Completed months use actuals only.')),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("year", models.PositiveIntegerField(unique=True)),
+                (
+                    "opening_cents",
+                    models.BigIntegerField(
+                        default=0,
+                        help_text="Primary account balance on 1 January, in cents",
+                    ),
+                ),
+                (
+                    "closed_through",
+                    models.PositiveSmallIntegerField(
+                        default=0,
+                        help_text="Last completed month: 0–12. Completed months use actuals only.",
+                    ),
+                ),
             ],
         ),
         migrations.CreateModel(
-            name='Category',
+            name="Category",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('name', models.CharField(max_length=100, unique=True)),
-                ('account', models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, to='budget.account')),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("name", models.CharField(max_length=100, unique=True)),
+                (
+                    "account",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.PROTECT, to="budget.account"
+                    ),
+                ),
             ],
         ),
         migrations.CreateModel(
-            name='Entry',
+            name="Entry",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('date', models.DateField()),
-                ('description', models.CharField(max_length=200)),
-                ('kind', models.CharField(choices=[('income', 'Income'), ('expense', 'Expense'), ('transfer', 'Internal transfer')], max_length=10)),
-                ('amount_cents', models.PositiveBigIntegerField()),
-                ('actual', models.BooleanField(default=False)),
-                ('original_cents', models.PositiveBigIntegerField(blank=True, editable=False, null=True)),
-                ('import_key', models.CharField(blank=True, max_length=64, null=True, unique=True)),
-                ('account', models.ForeignKey(help_text='Receiving account for income; paying account otherwise', on_delete=django.db.models.deletion.PROTECT, related_name='entries', to='budget.account')),
-                ('destination', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, related_name='incoming', to='budget.account')),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("date", models.DateField()),
+                ("description", models.CharField(max_length=200)),
+                (
+                    "kind",
+                    models.CharField(
+                        choices=[
+                            ("income", "Income"),
+                            ("expense", "Expense"),
+                            ("transfer", "Internal transfer"),
+                        ],
+                        max_length=10,
+                    ),
+                ),
+                ("amount_cents", models.PositiveBigIntegerField()),
+                ("actual", models.BooleanField(default=False)),
+                (
+                    "original_cents",
+                    models.PositiveBigIntegerField(
+                        blank=True, editable=False, null=True
+                    ),
+                ),
+                (
+                    "import_key",
+                    models.CharField(blank=True, max_length=64, null=True, unique=True),
+                ),
+                (
+                    "account",
+                    models.ForeignKey(
+                        help_text="Receiving account for income; paying account otherwise",
+                        on_delete=django.db.models.deletion.PROTECT,
+                        related_name="entries",
+                        to="budget.account",
+                    ),
+                ),
+                (
+                    "destination",
+                    models.ForeignKey(
+                        blank=True,
+                        null=True,
+                        on_delete=django.db.models.deletion.PROTECT,
+                        related_name="incoming",
+                        to="budget.account",
+                    ),
+                ),
             ],
             options={
-                'ordering': ['date', 'pk'],
+                "ordering": ["date", "pk"],
             },
         ),
         migrations.CreateModel(
-            name='Allocation',
+            name="Allocation",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('amount_cents', models.PositiveBigIntegerField()),
-                ('original_cents', models.PositiveBigIntegerField(blank=True, editable=False, null=True)),
-                ('category', models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, to='budget.category')),
-                ('entry', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='allocations', to='budget.entry')),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("amount_cents", models.PositiveBigIntegerField()),
+                (
+                    "original_cents",
+                    models.PositiveBigIntegerField(
+                        blank=True, editable=False, null=True
+                    ),
+                ),
+                (
+                    "category",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.PROTECT,
+                        to="budget.category",
+                    ),
+                ),
+                (
+                    "entry",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="allocations",
+                        to="budget.entry",
+                    ),
+                ),
             ],
         ),
     ]

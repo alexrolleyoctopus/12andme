@@ -6,3 +6,5 @@ __pycache__/
 data/
 staticfiles/
 .DS_Store
+.local-secret
+.audit-cache/

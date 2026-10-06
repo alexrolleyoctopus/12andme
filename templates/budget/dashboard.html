@@ -1,1 +1,243 @@
-{% extends 'base.html' %}{% load money %}{% block content %}<div class="heading"><div><p class="eyebrow">THE BIG PICTURE</p><h1>Your year, in balance.</h1><p class="muted">Plan the months ahead. Know where you stand.</p></div><form method="get"><label for="year">Budget year</label><select name="year" id="year" onchange="this.form.submit()">{% for p in plans %}<option {% if p.year == year %}selected{% endif %}>{{ p.year }}</option>{% empty %}<option>{{ year }}</option>{% endfor %}</select><noscript><button>View</button></noscript></form></div><div class="actions"><a class="button" href="/add/entry/">+ Add money movement</a><a href="/add/category/">+ Category</a><a href="/add/account/">+ Account</a><a href="/add/year/">+ Budget year</a></div>{% if plan %}{% if needs_review %}<p class="notice">{{ needs_review }} imported movement(s) need review. Match income and individual bills to their plans, categorise purchases, and identify transfers before relying on the forecast.</p>{% endif %}<div class="summary"><article><p>STARTING CASH · 1 JAN</p><strong>{{ plan.opening_cents|money }}</strong><small>Primary transaction account</small></article><article><p>PROJECTED YEAR-END CASH</p><strong class="{% if months.11.closing < 0 %}negative{% endif %}">${{ months.11.closing|floatformat:"2g" }}</strong><small>Actuals + remaining planned movements</small></article><article><p>YOUR FORECAST</p><strong>{{ plan.year }}</strong><small>Actuals only through month {{ plan.closed_through }} · <a href="/admin/budget/yearplan/{{ plan.pk }}/change/">Update</a></small></article></div><section class="panel"><div class="section-title"><h2>Monthly cash outlook</h2><span>Primary account only</span></div><p class="muted">Transfers out reduce cash here. Card purchases are counted in category spending below. ¹ Income less spending covers all accounts and excludes internal transfers.</p><div class="tablewrap"><table><thead><tr><th>Cash flow</th>{% for m in months %}<th>{{ m.name }} <small>{% if m.closed %}Actual{% else %}Forecast{% endif %}</small></th>{% endfor %}</tr></thead><tbody><tr><th>Opening cash</th>{% for m in months %}<td>{{ m.opening|floatformat:"2g" }}</td>{% endfor %}</tr><tr><th>Money in</th>{% for m in months %}<td>{{ m.incoming|floatformat:"2g" }}</td>{% endfor %}</tr><tr><th>Money out</th>{% for m in months %}<td>{{ m.outgoing|floatformat:"2g" }}</td>{% endfor %}</tr><tr><th>Monthly difference</th>{% for m in months %}<td class="{% if m.net < 0 %}negative{% endif %}">{{ m.net|floatformat:"2g" }}</td>{% endfor %}</tr><tr><th>Income less spending¹</th>{% for m in months %}<td class="{% if m.spending_net < 0 %}negative{% endif %}">{{ m.spending_net|floatformat:"2g" }}</td>{% endfor %}</tr><tr class="total"><th>Closing cash</th>{% for m in months %}<td class="{% if m.closing < 0 %}negative{% endif %}">{{ m.closing|floatformat:"2g" }}{% if m.closing < 0 %}<small>Below zero</small>{% endif %}</td>{% endfor %}</tr></tbody></table></div></section><section class="panel"><div class="section-title"><h2>Category spending</h2><span>Original budget / actual / remaining</span></div><p class="muted">Each cell shows budget, actual spend and remaining budget. A negative remainder means overspending. Transfer allocations describe funding and are excluded here.</p><div class="tablewrap"><table><thead><tr><th>Category</th>{% for m in months %}<th>{{ m.name }}</th>{% endfor %}</tr></thead><tbody>{% for c in categories %}<tr><th>{{ c.name }}</th>{% for cell in c.cells %}<td class="{% if cell.over %}negative{% endif %}"><small>Plan {{ cell.budget|floatformat:"2g" }}</small><b>{{ cell.actual|floatformat:"2g" }}</b><small>Left {{ cell.remaining|floatformat:"2g" }}</small><small>Forecast {{ cell.forecast|floatformat:"2g" }}</small></td>{% endfor %}</tr>{% empty %}<tr><td>Add categories to begin tracking spending.</td></tr>{% endfor %}</tbody></table></div></section><section class="panel"><div class="section-title"><h2>Money movements</h2><span>Planned and actual · {{ year }}</span></div><p class="muted">Mark a planned entry actual when it happens, or match an imported transaction to it. For spending buckets, categorise actual purchases; they automatically consume the remaining monthly allowance for the same account and category. Match individual bills or transfers to their planned movement. Update amounts and category splits using Edit.</p><div class="tablewrap"><table><thead><tr><th>Date</th><th>Description</th><th>Account</th><th>Amount</th><th>Categories</th><th>Status</th><th></th></tr></thead><tbody>{% for e in entries %}<tr><td>{{ e.date|date:'d M' }}</td><td><b>{{ e.description }}</b><small>{{ e.get_kind_display }}</small></td><td>{{ e.account }}{% if e.destination %} → {{ e.destination }}{% endif %}</td><td>{{ e.amount_cents|money }}</td><td>{% for a in e.allocations.all %}<small>{{ a.category }} {{ a.amount_cents|money }}</small>{% empty %}<small>Uncategorised</small>{% endfor %}</td><td><span class="pill {% if e.actual %}actual{% endif %}">{% if e.actual %}Actual{% else %}Planned{% endif %}</span></td><td><a href="/entry/{{ e.pk }}/edit/">Edit</a>{% if not e.actual %}<form method="post" action="/entry/{{ e.pk }}/settle/">{% csrf_token %}<button class="quiet">Mark actual</button></form>{% elif e.import_key %}<a href="/entry/{{ e.pk }}/match/">Match plan</a>{% endif %}</td></tr>{% empty %}<tr><td colspan="7">No movements yet. Add income, expenses and transfers to build your forecast.</td></tr>{% endfor %}</tbody></table></div></section>{% else %}<section class="panel empty"><h2>A fresh start for your money.</h2><p>First add your primary account, then a budget year with its opening cash balance.<br>Add categories and planned movements when you're ready.</p><a class="button" href="/add/account/">Add your first account</a></section>{% endif %}{% endblock %}
+{% extends "base.html" %}
+{% load money %}
+{% block content %}
+    <div class="heading">
+        <div>
+            <p class="eyebrow">THE BIG PICTURE</p>
+            <h1>Your year, in balance.</h1>
+            <p class="muted">Plan the months ahead. Know where you stand.</p>
+        </div>
+        <form method="get">
+            <label for="year">Budget year</label>
+            <select name="year" id="year" onchange="this.form.submit()">
+                {% for p in plans %}
+                    <option {% if p.year == year %} selected {% endif %}>{{ p.year }}</option>
+                {% empty %}
+                    <option>{{ year }}</option>
+                {% endfor %}
+            </select>
+            <noscript>
+                <button>View</button>
+            </noscript>
+        </form>
+    </div>
+    <div class="actions">
+        <a class="button" href="/add/entry/">+ Add money movement</a>
+        <a href="/add/category/">+ Category</a>
+        <a href="/add/account/">+ Account</a>
+        <a href="/add/year/">+ Budget year</a>
+    </div>
+    {% if plan %}
+        {% if needs_review %}
+            <p class="notice">{{ needs_review }} imported movement(s) need review. Match income and individual bills to their plans, categorise purchases, and identify transfers before relying on the forecast. Unresolved card payments are excluded from income and primary cash until matched to a funding plan or edited into a transfer with the correct paying account.</p>
+        {% endif %}
+        <div class="summary">
+            <article>
+                <p>STARTING CASH · 1 JAN</p>
+                <strong>{{ plan.opening_cents|money }}</strong>
+                <small>Primary transaction account</small>
+            </article>
+            <article>
+                <p>PROJECTED YEAR-END CASH</p>
+                <strong class="{% if months.11.closing < 0 %} negative {% endif %}">${{ months.11.closing|floatformat:"2g" }}</strong>
+                <small>Actuals + remaining planned movements</small>
+            </article>
+            <article>
+                <p>YOUR FORECAST</p>
+                <strong>{{ plan.year }}</strong>
+                <small>Actuals only through month {{ plan.closed_through }} · <a href="/admin/budget/yearplan/{{ plan.pk }}/change/">Update</a>
+                </small>
+            </article>
+        </div>
+        <section class="panel">
+            <div class="section-title">
+                <h2>Monthly cash outlook</h2>
+                <span>Primary account only</span>
+            </div>
+            <p class="muted">Transfers out reduce cash here. Card purchases are counted in category spending below. ¹ Income less spending covers all accounts and excludes internal transfers.</p>
+            <div class="tablewrap">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Cash flow</th>
+                            {% for m in months %}
+                                <th>
+                                    {{ m.name }} <small>
+                                    {% if m.closed %}
+                                        Actual
+                                    {% else %}
+                                        Forecast
+                                    {% endif %}
+                                    </small>
+                                </th>
+                            {% endfor %}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <th>Opening cash</th>
+                            {% for m in months %}
+                                <td>{{ m.opening|floatformat:"2g" }}</td>
+                            {% endfor %}
+                        </tr>
+                        <tr>
+                            <th>Money in</th>
+                            {% for m in months %}
+                                <td>{{ m.incoming|floatformat:"2g" }}</td>
+                            {% endfor %}
+                        </tr>
+                        <tr>
+                            <th>Money out</th>
+                            {% for m in months %}
+                                <td>{{ m.outgoing|floatformat:"2g" }}</td>
+                            {% endfor %}
+                        </tr>
+                        <tr>
+                            <th>Monthly difference</th>
+                            {% for m in months %}
+                                <td class="{% if m.net < 0 %} negative {% endif %}">{{ m.net|floatformat:"2g" }}</td>
+                            {% endfor %}
+                        </tr>
+                        <tr>
+                            <th>Income less spending¹</th>
+                            {% for m in months %}
+                                <td class="{% if m.spending_net < 0 %} negative {% endif %}">{{ m.spending_net|floatformat:"2g" }}</td>
+                            {% endfor %}
+                        </tr>
+                        <tr class="total">
+                            <th>Closing cash</th>
+                            {% for m in months %}
+                                <td class="{% if m.closing < 0 %} negative {% endif %}">{{ m.closing|floatformat:"2g" }}
+                                    {% if m.closing < 0 %}
+                                        <small>Below zero</small>
+                                    {% endif %}
+                                </td>
+                            {% endfor %}
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+        <section class="panel">
+            <div class="section-title">
+                <h2>Category spending</h2>
+                <span>Original budget / actual / remaining</span>
+            </div>
+            <p class="muted">Each cell shows budget, actual spend and remaining budget. A negative remainder means overspending. Transfer allocations describe funding and are excluded here.</p>
+            <div class="tablewrap">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Category</th>
+                            {% for m in months %}
+                                <th>{{ m.name }}</th>
+                            {% endfor %}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for c in categories %}
+                            <tr>
+                                <th>{{ c.name }}</th>
+                                {% for cell in c.cells %}
+                                    <td class="{% if cell.over %} negative {% endif %}">
+                                        <small>Plan {{ cell.budget|floatformat:"2g" }}</small>
+                                        <b>{{ cell.actual|floatformat:"2g" }}</b>
+                                        <small>Left {{ cell.remaining|floatformat:"2g" }}</small>
+                                        <small>Forecast {{ cell.forecast|floatformat:"2g" }}</small>
+                                    </td>
+                                {% endfor %}
+                            </tr>
+                        {% empty %}
+                            <tr>
+                                <td>Add categories to begin tracking spending.</td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+        <section class="panel">
+            <div class="section-title">
+                <h2>Money movements</h2>
+                <span>Planned and actual · {{ year }}</span>
+            </div>
+            <p class="muted">Mark a planned entry actual when it happens, or match an imported transaction to it. For spending buckets, categorise actual purchases; they automatically consume the remaining monthly allowance for the same account and category. Match individual bills or transfers to their planned movement. Update amounts and category splits using Edit.</p>
+            <div class="tablewrap">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Description</th>
+                            <th>Account</th>
+                            <th>Amount</th>
+                            <th>Categories</th>
+                            <th>Status</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for e in entries %}
+                            <tr>
+                                <td>{{ e.date|date:'d M' }}</td>
+                                <td>
+                                    <b>{{ e.description }}</b>
+                                    <small>{{ e.get_kind_display }}</small>
+                                    {% if e.bank_category %}<small>Bank category: {{ e.bank_category }}</small>{% endif %}
+                                    {% if e.bank_merchant %}<small>{{ e.bank_merchant }} · {{ e.source_label }}</small>{% endif %}
+                                </td>
+                                <td>
+                                    {{ e.account }}
+                                    {% if e.destination %}
+                                        → {{ e.destination }}
+                                    {% endif %}
+                                </td>
+                                <td>{{ e.amount_cents|money }}</td>
+                                <td>
+                                    {% for a in e.allocations.all %}
+                                        <small>{{ a.category }} {{ a.amount_cents|money }}</small>
+                                    {% empty %}
+                                        <small>Uncategorised</small>
+                                    {% endfor %}
+                                </td>
+                                <td>
+                                    <span class="pill {% if e.actual %} actual {% endif %}">
+                                        {% if e.actual %}
+                                            Actual
+                                        {% else %}
+                                            Planned
+                                        {% endif %}
+                                    </span>
+                                </td>
+                                <td>
+                                    <a href="/entry/{{ e.pk }}/edit/">Edit</a>
+                                    {% if not e.actual %}
+                                        <form method="post" action="/entry/{{ e.pk }}/settle/">
+                                            {% csrf_token %}
+                                            <button class="quiet">Mark actual</button>
+                                        </form>
+                                    {% elif e.import_key %}
+                                        <a href="/entry/{{ e.pk }}/match/">Match plan</a>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                        {% empty %}
+                            <tr>
+                                <td colspan="7">No movements yet. Add income, expenses and transfers to build your forecast.</td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    {% else %}
+        <section class="panel empty">
+            <h2>A fresh start for your money.</h2>
+            <p>
+                First add your primary account, then a budget year with its opening cash balance.
+                <br>
+                Add categories and planned movements when you're ready.
+            </p>
+            <a class="button" href="/add/account/">Add your first account</a>
+        </section>
+    {% endif %}
+{% endblock %}

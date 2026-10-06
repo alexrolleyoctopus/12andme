@@ -1,53 +1,143 @@
+"""Budget calculations; these functions read records but never change them.
+
+The report has two views: primary-account cash and category spending.
+Internal transfers affect the first, but are excluded from the second.
+"""
+
 import calendar
+from decimal import Decimal
 from collections import defaultdict
 from .models import Entry, Category
 
+
 def report(plan):
-    entries = list(Entry.objects.filter(date__year=plan.year).select_related("account", "destination").prefetch_related("allocations__category"))
+    """Build the year dashboard from the saved plan and transactions."""
+    entries = list(
+        Entry.objects.filter(date__year=plan.year)
+        .select_related("account", "destination")
+        .prefetch_related("allocations__category")
+    )
+    effective_amounts, remaining_by_category = remaining_allowances(entries)
+    months = monthly_cash(plan, entries, effective_amounts)
+    categories = category_spending(plan, entries, remaining_by_category)
+    return months, categories, entries
+
+
+def remaining_allowances(entries):
+    """Subtract categorised purchases from each matching monthly allowance."""
     # Unmatched actual purchases consume the remaining monthly spending allowance.
     # Matched bills retain original_cents and already replace their plan entirely.
-    pools = defaultdict(int)
-    for e in entries:
-        if e.actual and e.kind == "expense" and e.original_cents is None:
-            for a in e.allocations.all():
-                pools[(e.date.month, e.account_id, a.category_id)] += a.amount_cents
-    effective = {}
-    category_remaining = defaultdict(int)
-    for e in entries:
-        amount = e.amount_cents
-        if not e.actual and e.kind == "expense":
-            for a in e.allocations.all():
-                key = (e.date.month, e.account_id, a.category_id)
-                consumed = min(a.amount_cents, pools[key])
-                pools[key] -= consumed
+    unmatched_spending = defaultdict(int)
+    for entry in entries:
+        if (
+            entry.actual
+            and entry.kind in ("expense", "refund")
+            and entry.original_cents is None
+        ):
+            for allocation in entry.allocations.all():
+                unmatched_spending[
+                    (entry.date.month, entry.account_id, allocation.category_id)
+                ] += allocation.amount_cents * (-1 if entry.kind == "refund" else 1)
+    effective_amounts = {}
+    remaining_by_category = defaultdict(int)
+    for entry in entries:
+        amount = entry.amount_cents
+        if not entry.actual and entry.kind == "expense":
+            for allocation in entry.allocations.all():
+                key = (entry.date.month, entry.account_id, allocation.category_id)
+                # Refunds replenish an allowance, so consumed can be negative.
+                consumed = min(allocation.amount_cents, unmatched_spending[key])
+                unmatched_spending[key] -= consumed
                 amount -= consumed
-                category_remaining[(e.date.month, a.category_id)] += a.amount_cents - consumed
-        effective[e.pk] = amount
+                remaining_by_category[(entry.date.month, allocation.category_id)] += (
+                    allocation.amount_cents - consumed
+                )
+        effective_amounts[entry.pk] = amount
+    return effective_amounts, remaining_by_category
+
+
+def monthly_cash(plan, entries, effective_amounts):
+    """Carry primary-account cash forward, using actuals in closed months."""
     balance = plan.opening_cents
     months = []
     for month in range(1, 13):
-        active = [e for e in entries if e.date.month == month and (e.actual or month > plan.closed_through)]
+        active = [
+            entry
+            for entry in entries
+            if entry.date.month == month
+            and (entry.actual or month > plan.closed_through)
+        ]
         incoming = outgoing = earned = spent = 0
-        for e in active:
-            amount = effective[e.pk]
-            if e.kind == "income": earned += amount
-            if e.kind == "expense": spent += amount
-            if e.account.primary:
-                if e.kind == "income": incoming += amount
-                else: outgoing += amount
-            if e.kind == "transfer" and e.destination.primary: incoming += amount
+        for entry in active:
+            amount = effective_amounts[entry.pk]
+            if entry.kind == "income":
+                earned += amount
+            if entry.kind == "expense":
+                spent += amount
+            if entry.kind == "refund":
+                spent -= amount
+            if entry.account.primary:
+                if entry.kind in ("income", "refund"):
+                    incoming += amount
+                elif entry.kind != "card_payment":
+                    outgoing += amount
+            if entry.kind == "transfer" and entry.destination.primary:
+                incoming += amount
         opening = balance
         balance += incoming - outgoing
-        months.append(dict(number=month, name=calendar.month_abbr[month], opening=opening/100, incoming=incoming/100, outgoing=outgoing/100, net=(incoming-outgoing)/100, spending_net=(earned-spent)/100, closing=balance/100, closed=month <= plan.closed_through))
+        months.append(
+            dict(
+                number=month,
+                name=calendar.month_abbr[month],
+                opening=opening / Decimal(100),
+                incoming=incoming / Decimal(100),
+                outgoing=outgoing / Decimal(100),
+                net=(incoming - outgoing) / Decimal(100),
+                spending_net=(earned - spent) / Decimal(100),
+                closing=balance / Decimal(100),
+                closed=month <= plan.closed_through,
+            )
+        )
+    return months
+
+
+def category_spending(plan, entries, remaining_by_category):
+    """Compare the original budget with actual and forecast spending."""
     categories = []
-    actual_ids = {e.pk for e in entries if e.actual}
+    actual_signs = {
+        entry.pk: (-1 if entry.kind == "refund" else 1)
+        for entry in entries
+        if entry.actual
+    }
     for category in Category.objects.all():
         cells = []
         for month in range(1, 13):
-            allocations = [a for e in entries if e.date.month == month and e.kind == "expense" for a in e.allocations.all() if a.category_id == category.pk]
-            original = sum(a.original_cents or 0 for a in allocations)
-            actual = sum(a.amount_cents for a in allocations if a.entry_id in actual_ids)
-            forecast = actual + (category_remaining[(month, category.pk)] if month > plan.closed_through else 0)
-            cells.append(dict(budget=original/100, actual=actual/100, forecast=forecast/100, remaining=(original-actual)/100, over=actual > original))
+            allocations = [
+                allocation
+                for entry in entries
+                if entry.date.month == month and entry.kind in ("expense", "refund")
+                for allocation in entry.allocations.all()
+                if allocation.category_id == category.pk
+            ]
+            original = sum(allocation.original_cents or 0 for allocation in allocations)
+            actual = sum(
+                allocation.amount_cents * actual_signs[allocation.entry_id]
+                for allocation in allocations
+                if allocation.entry_id in actual_signs
+            )
+            forecast = actual + (
+                remaining_by_category[(month, category.pk)]
+                if month > plan.closed_through
+                else 0
+            )
+            cells.append(
+                dict(
+                    budget=original / Decimal(100),
+                    actual=actual / Decimal(100),
+                    forecast=forecast / Decimal(100),
+                    remaining=(original - actual) / Decimal(100),
+                    over=actual > original,
+                )
+            )
         categories.append(dict(name=category.name, cells=cells))
-    return months, categories, entries
+    return categories

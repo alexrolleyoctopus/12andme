@@ -1,1 +1,12 @@
-{% extends 'base.html' %}{% block content %}<section class="formcard"><p class="eyebrow">BUILD YOUR BUDGET</p><h1>{{ title|capfirst }}</h1><form method="post">{% csrf_token %}{{ form.as_p }}<button>Save</button> <a class="cancel" href="/">Cancel</a></form></section>{% endblock %}
+{% extends "base.html" %}
+{% block content %}
+    <section class="formcard">
+        <p class="eyebrow">BUILD YOUR BUDGET</p>
+        <h1>{{ title|capfirst }}</h1>
+        <form method="post">
+            {% csrf_token %}
+            {{ form.as_p }}<button>Save</button>
+            <a class="cancel" href="/">Cancel</a>
+        </form>
+    </section>
+{% endblock %}

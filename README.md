@@ -61,7 +61,7 @@ bank-001,2026-07-12,Registration,-1200.00
 bank-002,2026-07-15,Salary,4500.00
 ```
 
-Amounts use dollars, negative for outflows and positive for inflows. Dates use YYYY-MM-DD. Each row needs a stable identifier unique within its account. Reimporting the same account/ID skips the row; changed data with that ID is also skipped. Invalid rows roll back the whole upload. Maximum upload is 2 MB.
+Amounts use dollars, negative for outflows and positive for inflows. Dates use YYYY-MM-DD. Each row needs a stable identifier unique within its account. Reimporting the same account/ID skips the row; changed data with that ID is also skipped. Invalid rows roll back the whole upload. Maximum upload is 2 MB or 5,000 rows.
 
 Imported entries initially have no categories. Use **Edit** to categorise bucket purchases or identify transfers. Use **Match plan** for individual planned payments, salaries and transfers. If split amounts differ, adjust the planned entry and splits first, then match. Matching keeps the bank date, actual amount, import identifier, original budget and planned categories.
 
@@ -84,6 +84,26 @@ python manage.py check
 
 This foundation is intended for localhost/private development. The development server is not an internet deployment server. Docker is optional and is not required to start.
 
-Before public hosting, use a production WSGI server and HTTPS proxy, configure static assets, set `DEBUG=0`, provide a strong `SECRET_KEY`, configure `ALLOWED_HOSTS`, enable secure cookies and HTTPS redirects, and add login throttling. Run Django's deployment checks, arrange private persistent database storage and backups, and review deployment security. SQLite is suitable for a small household on one machine; don't put its database on a shared network filesystem.
+Before public hosting, use a production WSGI server and HTTPS proxy, configure static assets, set `DEBUG=0`, provide a strong `SECRET_KEY`, configure `ALLOWED_HOSTS`, verify HTTPS/proxy handling and static-file serving. Production settings already enable secure cookies and HTTPS redirects, and both login pages have password-guess limits. Run Django's deployment checks, arrange private persistent database storage and backups, and review deployment security. SQLite is suitable for a small household on one machine; don't put its database on a shared network filesystem.
 
 Future work: bank-specific CSV mappings/preview, automatic transfer pairing, import batch undo, guided bank reconciliation, richer category trend charts, and a production hosting recipe.
+
+
+## Reading and maintaining the code
+
+Start with [the beginner's code guide](docs/CODE_GUIDE.md). The [security review](docs/SECURITY_REVIEW.md) records the review scope, fixes, verification and remaining hosting requirements.
+
+Login attempts are limited to five failures per username or IP address, with a 15-minute cooldown. If you lock yourself out locally, run `python manage.py axes_reset`. This resets all login lockouts for the household. For long-running hosting, periodically use Axes' `axes_reset_logs` command and Django's `clearsessions` command to clean up old records; see each command's `--help` first.
+
+Local commands create `.local-secret` automatically with owner-only access. Do not share or commit it. Changing it signs users out. WSGI startup defaults to production (`DEBUG=0`) and requires a random `SECRET_KEY` of at least 50 characters plus explicit `ALLOWED_HOSTS`. Management commands default to development unless you explicitly set `DEBUG=0`. Environment variables must be set in your shell or hosting service; `.env` files are not automatically loaded.
+
+Optional formatting and security tools are separate from the runtime dependencies:
+
+```sh
+pip install -r requirements-dev.txt
+python -m black budget config manage.py
+python -m djlint templates --reformat --profile=django
+python -m pip_audit -r requirements.txt
+```
+
+After pulling database changes, run `python manage.py migrate` before starting the server. The security update adds the login-attempt tables and database rules enforcing one primary account and one split per category per entry.

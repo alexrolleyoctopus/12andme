@@ -1,1 +1,21 @@
-{% extends 'base.html' %}{% load money %}{% block content %}<section class="formcard"><h1>Match to your plan</h1><p>{{ entry.date }} · {{ entry.description }} · {{ entry.amount_cents|money }}</p><p>This replaces the planned movement with this actual payment, keeping its original budget, categories and transfer destination. Select only the same real-world movement.</p><form method="post">{% csrf_token %}<label for="planned">Planned movement</label><select name="planned" id="planned" required>{% for p in candidates %}<option value="{{ p.pk }}">{{ p.date }} · {{ p.description }} · {{ p.amount_cents|money }}</option>{% endfor %}</select><p><button>Match transaction</button></p></form></section>{% endblock %}
+{% extends "base.html" %}
+{% load money %}
+{% block content %}
+    <section class="formcard">
+        <h1>Match to your plan</h1>
+        <p>{{ entry.date }} · {{ entry.description }} · {{ entry.amount_cents|money }}</p>
+        <p>This replaces the planned movement with this actual payment, keeping its original budget, categories and transfer destination. Select only the same real-world movement.</p>
+        <form method="post">
+            {% csrf_token %}
+            <label for="planned">Planned movement</label>
+            <select name="planned" id="planned" required>
+                {% for p in candidates %}
+                    <option value="{{ p.pk }}">{{ p.date }} · {{ p.description }} · {{ p.amount_cents|money }}</option>
+                {% endfor %}
+            </select>
+            <p>
+                <button>Match transaction</button>
+            </p>
+        </form>
+    </section>
+{% endblock %}

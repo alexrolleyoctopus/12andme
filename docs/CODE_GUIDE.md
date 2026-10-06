@@ -57,6 +57,8 @@ Closed months use actual movements only. They are not automatically closed based
 
 For appearance changes, edit HTML/CSS and refresh the browser. For calculation changes, add a test with a concrete money example and run `python manage.py test`. The tests use their own temporary database, not your household database.
 
+CSV import tests use fictional records in `budget/test_card_import.py`; `budget/test_migrations.py` checks that the card-import upgrade retains existing records. Bank category hints are stored separately from your budget allocations.
+
 For model changes, run `python manage.py makemigrations` and review the generated file, then back up your real database before `python manage.py migrate`. Do not edit SQLite directly to change its structure.
 
 Keep Django's password hashing, login handling, HTML escaping and CSRF tokens in place. Avoid adding `|safe` to imported descriptions, raw SQL built from user input, or your own password storage.

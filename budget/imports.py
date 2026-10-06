@@ -28,9 +28,24 @@ CARD_COLUMNS = {
 
 def card_date(value):
     """Accept the export's mix of short/full English months, including 'Sept'."""
-    month_names = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"]
+    month_names = [
+        "january",
+        "february",
+        "march",
+        "april",
+        "may",
+        "june",
+        "july",
+        "august",
+        "september",
+        "october",
+        "november",
+        "december",
+    ]
     months = {name: number for number, name in enumerate(month_names, start=1)}
-    months.update({name[:3]: number for number, name in enumerate(month_names, start=1)})
+    months.update(
+        {name[:3]: number for number, name in enumerate(month_names, start=1)}
+    )
     months["sept"] = 9
     day, month, year = value.strip().lower().split()
     if month not in months or len(year) != 2 or not year.isdigit():

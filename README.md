@@ -34,7 +34,7 @@ The demo uses the current calendar year and includes monthly salary, fortnightly
 5. For recurring movements choose monthly, quarterly or fortnightly through December. Annual bills are entered once in their due month. Individual occurrences can be edited independently.
 6. Enter category splits as `Food: 1000.00`, one line per category. They must total the movement amount. Select the payment account explicitly; a category's usual account is descriptive in this version.
 
-All users share one household. Create trusted household logins through the admin interface; this is not a service for unrelated users. Staff users can manage accounts, years, categories and movements in Django admin. Admin monetary fields use **cents**; the main entry forms use **dollars**. Currency is AUD in this starter. Refunds currently import as income; netting refunds against category spending is future work.
+All users share one household. Create trusted household logins through the admin interface; this is not a service for unrelated users. Staff users can manage accounts, years, categories and movements in Django admin. Admin monetary fields use **cents**; the main entry forms use **dollars**. Currency is AUD in this starter. Credit-card refunds are supported and reduce the assigned category’s actual spending. Positive rows in the generic CSV format still need manual classification when they are refunds or transfers.
 
 ## How the calculations work
 
@@ -53,7 +53,15 @@ The month-end forecast does not detect a shortfall between paydays inside a mont
 
 ## CSV imports
 
-The starter accepts a standard UTF-8 format; transform your bank export to these columns first. Bank-specific column mapping and an import preview are future work.
+The supplied credit-card export is supported directly, including its blank column, full or abbreviated month names, bank category and merchant hints. Select one credit-card account for the whole export (including both cards). Dates in the budget use the transaction date; the processing date is retained separately.
+
+Purchases and fees become expenses. Refunds become refunds and subtract from assigned category spending. Card payments are explicitly marked as needing their source account reviewed; they do not become income or change primary cash until you match them to a planned transfer or edit them into a transfer with the correct source and destination. A card receipt date may differ from when money left your primary bank account: confirm the date against the primary account before treating its cash balance as reconciled.
+
+Rows without a processing date are conservatively skipped until a later export includes processing information. Bank categories are hints, not automatic assignments. Use **Assign categories** to assign all previously unassigned purchases/refunds in a selected account from one bank category to one budget category. Edit individual transactions for exceptions or multiple-category splits.
+
+The export has no bank transaction IDs. Duplicate detection uses transaction date, amount, source account/card, transaction type, description and occurrence number for otherwise identical rows. Bank category, merchant label and processing date are excluded from identity. Reimporting an unchanged file or unchanged overlapping rows is safe. Bank corrections and subsets of indistinguishable identical purchases can require manual reconciliation; no importer can reliably identify those without stable bank IDs. Full account numbers are not stored as display metadata; only the final four characters are retained, with a one-way hash used for identity.
+
+Other bank formats can use this standard UTF-8 format:
 
 ```csv
 id,date,description,amount
@@ -86,7 +94,7 @@ This foundation is intended for localhost/private development. The development s
 
 Before public hosting, use a production WSGI server and HTTPS proxy, configure static assets, set `DEBUG=0`, provide a strong `SECRET_KEY`, configure `ALLOWED_HOSTS`, verify HTTPS/proxy handling and static-file serving. Production settings already enable secure cookies and HTTPS redirects, and both login pages have password-guess limits. Run Django's deployment checks, arrange private persistent database storage and backups, and review deployment security. SQLite is suitable for a small household on one machine; don't put its database on a shared network filesystem.
 
-Future work: bank-specific CSV mappings/preview, automatic transfer pairing, import batch undo, guided bank reconciliation, richer category trend charts, and a production hosting recipe.
+Future work: additional bank-specific CSV mappings/preview, automatic transfer pairing, import batch undo, guided bank reconciliation, richer category trend charts, and a production hosting recipe.
 
 
 ## Reading and maintaining the code
@@ -107,3 +115,23 @@ python -m pip_audit -r requirements.txt
 ```
 
 After pulling database changes, run `python manage.py migrate` before starting the server. The security update adds the login-attempt tables and database rules enforcing one primary account and one split per category per entry.
+
+
+## Upgrades without losing your budget
+
+Your SQLite database is separate from the application code. Updating source files does not reset it. Django records which schema migrations have been applied and `migrate` applies only the new changes, preserving existing rows unless a future migration explicitly removes or transforms them. Review migration changes and keep a backup before every upgrade.
+
+For the current local setup:
+
+1. Stop the running application.
+2. Copy `db.sqlite3` to a private, timestamped backup location. If you configured `DATABASE_PATH`, back up that file instead.
+3. Update the application code.
+4. Activate the virtual environment and run `pip install -r requirements.txt`.
+5. Run `python manage.py migrate` against the **same database path**.
+6. Start the application and check your opening balance and recent transactions.
+
+Do not delete the database, run `flush`, or reload demo data during an upgrade. `migrate` updates the existing database; it does not create a fresh budget. If an upgrade fails, keep the app stopped, restore the backup and restore the corresponding older application version. Do not assume old application code can safely read a newer database schema.
+
+For future Docker hosting, place the database in a persistent volume or bind-mounted data directory outside the image and keep `DATABASE_PATH` pointed there. Rebuilding/replacing a container should replace only code. Never remove the data volume as part of an upgrade. This deployment configuration will be added when we choose the host.
+
+The credit-card importer upgrade has an automated migration test that creates a budget under the previous schema, applies the upgrade, and verifies the accounts, categories, transactions, original budget and allocations are retained.

@@ -6,38 +6,47 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('budget', '0002_alter_yearplan_closed_through_alter_yearplan_year_and_more'),
+        ("budget", "0002_alter_yearplan_closed_through_alter_yearplan_year_and_more"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='entry',
-            name='bank_category',
+            model_name="entry",
+            name="bank_category",
             field=models.CharField(blank=True, max_length=200),
         ),
         migrations.AddField(
-            model_name='entry',
-            name='bank_merchant',
+            model_name="entry",
+            name="bank_merchant",
             field=models.CharField(blank=True, max_length=200),
         ),
         migrations.AddField(
-            model_name='entry',
-            name='bank_type',
+            model_name="entry",
+            name="bank_type",
             field=models.CharField(blank=True, max_length=80),
         ),
         migrations.AddField(
-            model_name='entry',
-            name='processed_date',
+            model_name="entry",
+            name="processed_date",
             field=models.DateField(blank=True, null=True),
         ),
         migrations.AddField(
-            model_name='entry',
-            name='source_label',
+            model_name="entry",
+            name="source_label",
             field=models.CharField(blank=True, max_length=80),
         ),
         migrations.AlterField(
-            model_name='entry',
-            name='kind',
-            field=models.CharField(choices=[('income', 'Income'), ('expense', 'Expense'), ('refund', 'Refund'), ('card_payment', 'Card payment — source needs review'), ('transfer', 'Internal transfer')], max_length=20),
+            model_name="entry",
+            name="kind",
+            field=models.CharField(
+                choices=[
+                    ("income", "Income"),
+                    ("expense", "Expense"),
+                    ("refund", "Refund"),
+                    ("card_payment", "Card payment — source needs review"),
+                    ("transfer", "Internal transfer"),
+                ],
+                max_length=20,
+            ),
         ),
     ]

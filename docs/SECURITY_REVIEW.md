@@ -42,7 +42,7 @@ Do not interpret the passing tests or dependency audit as assurance against ever
 
 ## Remaining functional limitations
 
-CSV transfer pairing, refunds, import batch undo and guided reconciliation remain starter limitations described in README. Review imported transactions before relying on financial totals. Concurrent edits have no conflict-resolution interface, and there is no separate immutable audit trail of every edit. Original budget amounts are retained for ordinary amount edits, but moving a planned entry to a different month or changing its kind/account changes where that original budget appears; a fully versioned annual budget is not implemented. These limits matter for data integrity even though they are not login bypasses.
+CSV transfer pairing, import batch undo and guided reconciliation remain starter limitations described in README. Review imported transactions before relying on financial totals. Concurrent edits have no conflict-resolution interface, and there is no separate immutable audit trail of every edit. Original budget amounts are retained for ordinary amount edits, but moving a planned entry to a different month or changing its kind/account changes where that original budget appears; a fully versioned annual budget is not implemented. These limits matter for data integrity even though they are not login bypasses.
 
 ## References
 

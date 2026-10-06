@@ -9,7 +9,7 @@ from django.contrib.auth.models import User
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 
-from .imports import read_rows, save_rows
+from .imports import read_rows, save_rows, card_date
 from .models import Account, Allocation, Category, Entry, YearPlan
 from .services import report
 
@@ -215,3 +215,8 @@ class CardImportTests(TestCase):
         self.assertEqual(cell["actual"], -10)
         self.assertEqual(cell["remaining"], 110)
         self.assertEqual(cell["forecast"], 100)
+
+    def test_full_month_names_from_actual_export(self):
+        self.assertEqual(card_date("31 July 26"), date(2026, 7, 31))
+        self.assertEqual(card_date("30 Sept 26"), date(2026, 9, 30))
+        self.assertEqual(card_date("06 Oct 26"), date(2026, 10, 6))

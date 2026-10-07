@@ -37,31 +37,42 @@ class TransactionsPageTests(TestCase):
         self.assertNotContains(response, "August purchase")
         self.assertContains(response, "?month=2026-06")
         self.assertContains(response, "?month=2026-08")
-        self.assertContains(response, "Save category", count=25)
+        self.assertContains(response, ">Save all</button>", count=1)
         self.assertContains(self.client.get("/transactions/"), "August purchase")
 
-    def test_inline_assignment_stays_in_month(self):
+    def test_save_all_stays_in_month_and_preserves_blanks(self):
+        key = f"entry_{self.august.pk}-category"
         response = self.client.post(
-            "/transactions/?month=2026-08",
-            {"entry": self.august.pk, "category": self.category.pk},
+            "/transactions/?month=2026-08", {key: self.category.pk}
         )
         self.assertEqual(response.status_code, 302)
-        self.assertEqual(
-            response.url, f"/transactions/?month=2026-08#transaction-{self.august.pk}"
-        )
+        self.assertEqual(response.url, "/transactions/?month=2026-08")
         self.assertEqual(self.august.allocations.get().category, self.category)
-        response = self.client.post(
-            "/transactions/?month=2026-08", {"entry": self.august.pk, "category": ""}
-        )
-        self.assertContains(response, "This field is required.")
+        self.client.post("/transactions/?month=2026-08", {key: ""})
         self.assertEqual(self.august.allocations.count(), 1)
-        self.assertEqual(
-            self.client.post(
-                "/transactions/?month=2026-07",
-                {"entry": self.august.pk, "category": self.category.pk},
-            ).status_code,
-            404,
-        )
+        self.client.post("/transactions/?month=2026-07", {key: self.category.pk})
+        self.assertEqual(self.august.allocations.count(), 1)
+
+    def test_bulk_validation_is_atomic(self):
+        entries = list(Entry.objects.filter(date__month=7)[:2])
+        data = {
+            f"entry_{entries[0].pk}-category": self.category.pk,
+            f"entry_{entries[1].pk}-category": "999999",
+        }
+        response = self.client.post("/transactions/?month=2026-07", data)
+        self.assertContains(response, "Select a valid choice")
+        self.assertFalse(entries[0].allocations.exists())
+        data[f"entry_{entries[1].pk}-category"] = self.category.pk
+        self.client.post("/transactions/?month=2026-07", data)
+        for entry in entries:
+            self.assertEqual(entry.allocations.get().category, self.category)
+
+    def test_calendar_month_picker(self):
+        response = self.client.get("/transactions/?year=2026&month=7")
+        self.assertEqual(response.context["month"], date(2026, 7, 1))
+        self.assertContains(response, 'class="month-grid"')
+        self.assertContains(response, 'name="month"', count=12)
+        self.assertNotContains(response, 'type="month"')
 
     def test_home_pagination_does_not_change_totals(self):
         first = self.client.get("/?year=2026")

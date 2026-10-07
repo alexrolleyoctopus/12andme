@@ -454,3 +454,40 @@ footer {
     display: inline-block;
     margin-top: 10px;
 }
+
+.month-picker {
+    flex: 0 0 260px;
+    max-width: 100%;
+}
+.month-picker summary {
+    cursor: pointer;
+    padding: 12px;
+    border: 1px solid var(--line);
+    border-radius: 7px;
+    background: white;
+}
+.month-picker form {
+    padding: 12px;
+    background: white;
+}
+.month-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+    margin-top: 12px;
+}
+.month-grid button {
+    padding: 10px;
+}
+.month-grid button[aria-current] {
+    outline: 3px solid var(--ink);
+    outline-offset: 1px;
+}
+.heading .month-picker select {
+    width: 100%;
+}
+@media (max-width: 750px) {
+    .heading:has(.month-picker) {
+        flex-wrap: wrap;
+    }
+}

@@ -1,6 +1,7 @@
 """Page handlers: validate forms, call budget logic, then render or redirect."""
 
 from datetime import date, timedelta
+import calendar
 from decimal import Decimal
 from django.contrib.auth.decorators import login_required
 from django.views.decorators.http import require_POST, require_http_methods
@@ -335,9 +336,10 @@ def transactions(request):
     latest = Entry.objects.order_by("-date").first()
     selected = latest.date.replace(day=1) if latest else date.today().replace(day=1)
     try:
-        selected = date.fromisoformat(
-            request.GET.get("month", selected.strftime("%Y-%m")) + "-01"
-        )
+        month_value = request.GET.get("month", selected.strftime("%Y-%m"))
+        if "year" in request.GET:
+            month_value = f"{int(request.GET['year']):04d}-{int(month_value):02d}"
+        selected = date.fromisoformat(month_value + "-01")
         if not 2000 <= selected.year <= 2100:
             raise ValueError()
     except ValueError:
@@ -353,39 +355,35 @@ def transactions(request):
         .prefetch_related("allocations__category")
         .order_by("-date", "-pk")
     )
-    failed_form = None
-    edited_id = None
-    if request.method == "POST":
-        try:
-            edited_id = int(request.POST.get("entry", ""))
-        except ValueError:
-            edited_id = None
-        entry = get_object_or_404(entries, pk=edited_id)
-        failed_form = TransactionCategoryForm(
-            request.POST, auto_id=f"entry_{entry.pk}_%s"
-        )
-        if failed_form.is_valid():
-            with transaction.atomic():
-                failed_form.save(entry)
-            messages.success(request, "Transaction category saved.")
-            return redirect(
-                f"/transactions/?month={selected:%Y-%m}#transaction-{entry.pk}"
-            )
-
     rows = []
+    changes = []
+    valid = True
     for entry in entries:
         allocations = [a for a in entry.allocations.all() if a.amount_cents]
         initial = (
             {"category": allocations[0].category_id} if len(allocations) == 1 else {}
         )
-        form = (
-            failed_form
-            if entry.pk == edited_id
-            else TransactionCategoryForm(
-                initial=initial, auto_id=f"entry_{entry.pk}_%s"
-            )
+        form = TransactionCategoryForm(
+            request.POST if request.method == "POST" else None,
+            initial=initial,
+            prefix=f"entry_{entry.pk}",
         )
+        form.fields["category"].required = False
+        form.fields["category"].empty_label = "Keep current assignment"
+        if request.method == "POST":
+            if not form.is_valid():
+                valid = False
+            elif form.cleaned_data["category"]:
+                category = form.cleaned_data["category"]
+                if len(allocations) != 1 or allocations[0].category_id != category.pk:
+                    changes.append((form, entry))
         rows.append({"entry": entry, "allocations": allocations, "form": form})
+    if request.method == "POST" and valid:
+        with transaction.atomic():
+            for form, entry in changes:
+                form.save(entry)
+        messages.success(request, f"Saved {len(changes)} category changes.")
+        return redirect(f"/transactions/?month={selected:%Y-%m}")
     previous = (selected.replace(day=1) - timedelta(days=1)).replace(day=1)
     following = date(selected.year + selected.month // 12, selected.month % 12 + 1, 1)
     return render(
@@ -394,6 +392,10 @@ def transactions(request):
         {
             "rows": rows,
             "month": selected,
+            "picker_years": range(2000, 2101),
+            "picker_months": [
+                (number, calendar.month_abbr[number]) for number in range(1, 13)
+            ],
             "previous": previous if previous.year >= 2000 else None,
             "following": following if following.year <= 2100 else None,
         },

@@ -1,12 +1,13 @@
 """Page handlers: validate forms, call budget logic, then render or redirect."""
 
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 from django.contrib.auth.decorators import login_required
 from django.views.decorators.http import require_POST, require_http_methods
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
 from django.db import transaction
+from django.core.paginator import Paginator
 from .models import YearPlan, Entry, Allocation, Category
 from .forms import (
     AccountForm,
@@ -40,7 +41,7 @@ def dashboard(request):
             plans=plans,
             months=months,
             categories=categories,
-            entries=entries,
+            entries=Paginator(entries, 20).get_page(request.GET.get("page")),
             year=year,
             needs_review=sum(
                 1
@@ -324,4 +325,76 @@ def assign_transaction(request, pk):
         return redirect(f"/?year={entry.date.year}")
     return render(
         request, "budget/assign_transaction.html", {"entry": entry, "form": form}
+    )
+
+
+@login_required
+@require_http_methods(["GET", "POST"])
+def transactions(request):
+    """Browse one calendar month and assign categories without leaving the list."""
+    latest = Entry.objects.order_by("-date").first()
+    selected = latest.date.replace(day=1) if latest else date.today().replace(day=1)
+    try:
+        selected = date.fromisoformat(
+            request.GET.get("month", selected.strftime("%Y-%m")) + "-01"
+        )
+        if not 2000 <= selected.year <= 2100:
+            raise ValueError()
+    except ValueError:
+        messages.error(request, "Choose a valid month between 2000 and 2100.")
+        selected = date.today().replace(day=1)
+
+    entries = (
+        Entry.objects.filter(
+            date__year=selected.year,
+            date__month=selected.month,
+        )
+        .select_related("account", "destination")
+        .prefetch_related("allocations__category")
+        .order_by("-date", "-pk")
+    )
+    failed_form = None
+    edited_id = None
+    if request.method == "POST":
+        try:
+            edited_id = int(request.POST.get("entry", ""))
+        except ValueError:
+            edited_id = None
+        entry = get_object_or_404(entries, pk=edited_id)
+        failed_form = TransactionCategoryForm(
+            request.POST, auto_id=f"entry_{entry.pk}_%s"
+        )
+        if failed_form.is_valid():
+            with transaction.atomic():
+                failed_form.save(entry)
+            messages.success(request, "Transaction category saved.")
+            return redirect(
+                f"/transactions/?month={selected:%Y-%m}#transaction-{entry.pk}"
+            )
+
+    rows = []
+    for entry in entries:
+        allocations = [a for a in entry.allocations.all() if a.amount_cents]
+        initial = (
+            {"category": allocations[0].category_id} if len(allocations) == 1 else {}
+        )
+        form = (
+            failed_form
+            if entry.pk == edited_id
+            else TransactionCategoryForm(
+                initial=initial, auto_id=f"entry_{entry.pk}_%s"
+            )
+        )
+        rows.append({"entry": entry, "allocations": allocations, "form": form})
+    previous = (selected.replace(day=1) - timedelta(days=1)).replace(day=1)
+    following = date(selected.year + selected.month // 12, selected.month % 12 + 1, 1)
+    return render(
+        request,
+        "budget/transactions.html",
+        {
+            "rows": rows,
+            "month": selected,
+            "previous": previous if previous.year >= 2000 else None,
+            "following": following if following.year <= 2100 else None,
+        },
     )

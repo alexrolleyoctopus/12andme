@@ -158,7 +158,7 @@
         </section>
         <section class="panel">
             <div class="section-title">
-                <h2>Money movements</h2>
+                <h2 id="money-movements">Money movements</h2>
                 <span>Planned and actual · {{ year }}</span>
             </div>
             <p class="muted">Income can have a separate budget month. Cash totals use the payment date; budget income less spending uses the selected month.</p>
@@ -231,6 +231,12 @@
                     </tbody>
                 </table>
             </div>
+            <nav aria-label="Money movements pages" class="actions">
+                {% if entries.has_previous %}<a href="?year={{ year }}&amp;page={{ entries.previous_page_number }}#money-movements">Previous 20</a>{% endif %}
+                <span>Page {{ entries.number }} of {{ entries.paginator.num_pages }} · {{ entries.paginator.count }} movements</span>
+                {% if entries.has_next %}<a href="?year={{ year }}&amp;page={{ entries.next_page_number }}#money-movements">Next 20</a>{% endif %}
+                <a href="/transactions/">View transactions by month</a>
+            </nav>
         </section>
     {% else %}
         <section class="panel empty">

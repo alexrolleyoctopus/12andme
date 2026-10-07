@@ -15,6 +15,7 @@ from .forms import (
     EntryForm,
     ImportForm,
     AssignmentForm,
+    TransactionCategoryForm,
 )
 from .imports import read_rows, save_rows
 from .services import report
@@ -302,3 +303,25 @@ def edit_category(request, pk):
         )
         return redirect(f"/categories/?year={form.cleaned_data['year_plan'].year}")
     return render(request, "budget/form.html", {"form": form, "title": "Edit category"})
+
+
+@login_required
+@require_http_methods(["GET", "POST"])
+def assign_transaction(request, pk):
+    """Change category allocation without changing the bank transaction."""
+    entry = get_object_or_404(Entry, pk=pk)
+    allocations = entry.allocations.filter(amount_cents__gt=0)
+    initial = {}
+    if allocations.count() == 1:
+        initial["category"] = allocations.first().category_id
+    form = TransactionCategoryForm(
+        request.POST if request.method == "POST" else None, initial=initial
+    )
+    if request.method == "POST" and form.is_valid():
+        with transaction.atomic():
+            form.save(entry)
+        messages.success(request, "Transaction category saved.")
+        return redirect(f"/?year={entry.date.year}")
+    return render(
+        request, "budget/assign_transaction.html", {"entry": entry, "form": form}
+    )

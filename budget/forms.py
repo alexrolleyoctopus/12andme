@@ -287,3 +287,32 @@ class AssignmentForm(forms.Form):
             .distinct()
         )
         self.fields["bank_category"].choices = [(name, name) for name in names]
+
+
+class TransactionCategoryForm(forms.Form):
+    category = forms.ModelChoiceField(
+        queryset=Category.objects.order_by("name"),
+        empty_label="Choose a category",
+        help_text="Assign the full transaction amount to this category. This replaces any current split.",
+    )
+
+    def save(self, entry):
+        category = self.cleaned_data["category"]
+        allocation, created = Allocation.objects.get_or_create(
+            entry=entry,
+            category=category,
+            defaults={"amount_cents": entry.amount_cents},
+        )
+        if not created:
+            allocation.amount_cents = entry.amount_cents
+            allocation.save()
+        # Reclassification must not rewrite the original planned budget.
+        for other in entry.allocations.exclude(pk=allocation.pk):
+            if other.original_cents:
+                other.amount_cents = 0
+                other.save()
+            else:
+                other.delete()
+        if created and not entry.actual:
+            allocation.original_cents = 0
+            allocation.save()

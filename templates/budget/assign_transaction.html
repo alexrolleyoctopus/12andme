@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% load money %}
+{% block content %}
+<section class="formcard">
+    <h1>Assign category</h1>
+    <p><b>{{ entry.description }}</b><br>{{ entry.date|date:"j F Y" }} · {{ entry.account }} · {{ entry.amount_cents|money }}</p>
+    <p>Current assignment:
+    {% for allocation in entry.allocations.all %}
+        {% if allocation.amount_cents %}{{ allocation.category }} ({{ allocation.amount_cents|money }}) {% endif %}
+    {% empty %}Uncategorised{% endfor %}
+    </p>
+    <form method="post">
+        {% csrf_token %}
+        {{ form.as_p }}
+        <button>Save category</button>
+        <a href="/?year={{ entry.date.year }}">Cancel</a>
+    </form>
+    <p>Need more than one category? <a href="/entry/{{ entry.pk }}/edit/">Edit category splits</a>.</p>
+    <p>Missing a category? <a href="/add/category/?year={{ entry.date.year }}">Add a category</a>, then return to this transaction.</p>
+</section>
+{% endblock %}

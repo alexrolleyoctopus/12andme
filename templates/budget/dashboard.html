@@ -196,7 +196,7 @@
                                 <td>{{ e.amount_cents|money }}</td>
                                 <td>
                                     {% for a in e.allocations.all %}
-                                        <small>{{ a.category }} {{ a.amount_cents|money }}</small>
+                                        {% if a.amount_cents %}<small>{{ a.category }} {{ a.amount_cents|money }}</small>{% endif %}
                                     {% empty %}
                                         <small>Uncategorised</small>
                                     {% endfor %}
@@ -211,7 +211,8 @@
                                     </span>
                                 </td>
                                 <td>
-                                    <a href="/entry/{{ e.pk }}/edit/">Edit</a>
+                                    <a href="/entry/{{ e.pk }}/category/">Assign category</a>
+                                    <a href="/entry/{{ e.pk }}/edit/">Edit / split</a>
                                     {% if not e.actual %}
                                         <form method="post" action="/entry/{{ e.pk }}/settle/">
                                             {% csrf_token %}

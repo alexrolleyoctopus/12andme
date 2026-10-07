@@ -32,6 +32,7 @@ INSTALLED_APPS = [
 ]
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -108,3 +109,14 @@ STATIC_ROOT = BASE_DIR / "staticfiles"
 # Limit uploaded files before the import parser runs; the hosting proxy must also cap request size.
 DATA_UPLOAD_MAX_NUMBER_FILES = 1
 FILE_UPLOAD_MAX_MEMORY_SIZE = 2 * 1024 * 1024
+
+# Only enable behind our private Compose network: Caddy overwrites these headers.
+TRUST_CADDY = os.environ.get("TRUST_CADDY", "0") == "1"
+if TRUST_CADDY:
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+
+# Serve CSS (including Django admin CSS) through Gunicorn in production.
+STORAGES = {
+    "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+    "staticfiles": {"BACKEND": "whitenoise.storage.CompressedStaticFilesStorage"},
+}

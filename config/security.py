@@ -4,6 +4,8 @@ import os
 import secrets
 from pathlib import Path
 from django.core.exceptions import ImproperlyConfigured
+from django.conf import settings
+from ipaddress import ip_address
 
 
 def secret_key(base_dir, debug):
@@ -32,4 +34,11 @@ def secret_key(base_dir, debug):
 
 def client_ip(request):
     """Do not trust client-supplied forwarding headers for login throttling."""
+    if settings.TRUST_CADDY:
+        # Compose publishes only Caddy. It replaces this header using the TCP peer.
+        value = request.META.get("HTTP_X_12ANDME_CLIENT_IP", "")
+        try:
+            return str(ip_address(value))
+        except ValueError:
+            pass
     return request.META.get("REMOTE_ADDR")

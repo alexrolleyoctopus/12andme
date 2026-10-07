@@ -1,0 +1,16 @@
+{$BUDGET_HOST:budget.home.arpa} {
+    # Private home-network HTTPS; no public domain or ACME service required.
+    tls internal
+    encode gzip
+
+    # Includes multipart overhead around the app's 2 MB CSV limit.
+    request_body {
+        max_size 3MB
+    }
+
+    reverse_proxy app:8000 {
+        # Overwrite these headers. Never accept a client's claimed identity/scheme.
+        header_up X-Forwarded-Proto https
+        header_up X-12andme-Client-IP {remote_host}
+    }
+}

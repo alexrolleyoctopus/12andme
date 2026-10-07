@@ -90,11 +90,11 @@ python manage.py check
 
 ## Hosting
 
-This foundation is intended for localhost/private development. The development server is not an internet deployment server. Docker is optional and is not required to start.
+For a Linux home server, follow the [Docker and Caddy guide](docs/DOCKER.md). It includes private HTTPS, a persistent database, existing-data migration, backups and upgrades. Local development can still use `runserver`; Docker uses Gunicorn and WhiteNoise.
 
 Before public hosting, use a production WSGI server and HTTPS proxy, configure static assets, set `DEBUG=0`, provide a strong `SECRET_KEY`, configure `ALLOWED_HOSTS`, verify HTTPS/proxy handling and static-file serving. Production settings already enable secure cookies and HTTPS redirects, and both login pages have password-guess limits. Run Django's deployment checks, arrange private persistent database storage and backups, and review deployment security. SQLite is suitable for a small household on one machine; don't put its database on a shared network filesystem.
 
-Future work: additional bank-specific CSV mappings/preview, automatic transfer pairing, import batch undo, guided bank reconciliation, richer category trend charts, and a production hosting recipe.
+Future work: additional bank-specific CSV mappings/preview, automatic transfer pairing, import batch undo, guided bank reconciliation, richer category trend charts.
 
 
 ## Reading and maintaining the code
@@ -132,6 +132,6 @@ For the current local setup:
 
 Do not delete the database, run `flush`, or reload demo data during an upgrade. `migrate` updates the existing database; it does not create a fresh budget. If an upgrade fails, keep the app stopped, restore the backup and restore the corresponding older application version. Do not assume old application code can safely read a newer database schema.
 
-For future Docker hosting, place the database in a persistent volume or bind-mounted data directory outside the image and keep `DATABASE_PATH` pointed there. Rebuilding/replacing a container should replace only code. Never remove the data volume as part of an upgrade. This deployment configuration will be added when we choose the host.
+The supplied Docker setup mounts `./data` at `/data` and uses `DATABASE_PATH=/data/db.sqlite3`. Rebuilding/replacing the app container replaces only code. Caddy certificates persist in separate named volumes. Follow [the Docker upgrade steps](docs/DOCKER.md#7-back-up-and-upgrade-without-losing-data); never delete the data directory or certificate volumes during an upgrade.
 
 The credit-card importer upgrade has an automated migration test that creates a budget under the previous schema, applies the upgrade, and verifies the accounts, categories, transactions, original budget and allocations are retained.

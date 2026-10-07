@@ -1,0 +1,15 @@
+# Allow only the files needed by the Docker build.
+**
+!Dockerfile
+!requirements.txt
+!manage.py
+!config/
+!config/**
+!budget/
+!budget/**
+!templates/
+!templates/**
+!static/
+!static/**
+**/__pycache__/
+**/*.pyc

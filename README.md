@@ -29,10 +29,10 @@ The demo uses the current calendar year and includes monthly salary, fortnightly
 
 1. Add accounts and tick **primary** for your everyday transaction account. Only one account may be primary.
 2. Add a budget year with the primary account's 1 January opening balance, in dollars. Leave **closed through** at 0 initially.
-3. Add categories with their usual payment account.
+3. Add categories with an amount per occurrence and a schedule for the selected budget year. Categories are independent of accounts.
 4. Add planned money movements. Income uses its receiving account; expenses and transfers use their paying account. Transfers also need a destination.
 5. For recurring movements choose monthly, quarterly or fortnightly through December. Annual bills are entered once in their due month. Individual occurrences can be edited independently.
-6. Enter category splits as `Food: 1000.00`, one line per category. They must total the movement amount. Select the payment account explicitly; a category's usual account is descriptive in this version.
+6. Enter category splits as `Food: 1000.00`, one line per category. They must total the movement amount. Select the payment account on the movement itself.
 
 All users share one household. Create trusted household logins through the admin interface; this is not a service for unrelated users. Staff users can manage accounts, years, categories and movements in Django admin. Admin monetary fields use **cents**; the main entry forms use **dollars**. Currency is AUD in this starter. Credit-card refunds are supported and reduce the assigned category’s actual spending. Positive rows in the generic CSV format still need manual classification when they are refunds or transfers.
 
@@ -44,6 +44,9 @@ All users share one household. Create trusted household logins through the admin
 - Transfers can have category funding splits; those splits are excluded from spending totals.
 - Income less spending covers all tracked accounts and excludes transfers. It is distinct from the primary account's monthly cash difference.
 - Original planned amounts are preserved when amounts are edited or a plan becomes actual. Category cells show original budget, actual, remaining original budget and current forecast.
+- Category schedules support monthly, quarterly, every six months, and annual amounts. Choose a day and, except for monthly schedules, the first due month. Repeats run from that month through December. Days beyond the end of a month use its last day. The full amount lands in each due month.
+- Use **Categories** to edit a schedule for a selected year. Initial amounts remain the original budget for comparison; edits update the forecast. Other years are unaffected. Existing categories keep their previous entry-based budget until you set a schedule.
+- Category schedules forecast spending, but do not create account movements. Add planned payments or transfers to forecast primary-account cash. A scheduled category replaces its entry-based budget rather than adding a second budget.
 - For a spending bucket, add one planned monthly allowance and categorise individual actual purchases to the same account and category. Unmatched actual purchases consume that allowance automatically; overspending raises the forecast above it.
 - For an individual bill or transfer, edit the planned movement to the real amount and **mark actual**, or match an imported transaction to it. Do not both mark a plan actual and retain a separate imported copy.
 - Completed months (configured using **closed through** on the year) use actuals only. Open months use actuals plus remaining plans. Closing a month requires checking completeness against the bank balance yourself.
@@ -90,11 +93,11 @@ python manage.py check
 
 ## Hosting
 
-This foundation is intended for localhost/private development. The development server is not an internet deployment server. Docker is optional and is not required to start.
+For a Linux home server, follow the [Docker and Caddy guide](docs/DOCKER.md). It includes private HTTPS, a persistent database, existing-data migration, backups and upgrades. Local development can still use `runserver`; Docker uses Gunicorn and WhiteNoise.
 
 Before public hosting, use a production WSGI server and HTTPS proxy, configure static assets, set `DEBUG=0`, provide a strong `SECRET_KEY`, configure `ALLOWED_HOSTS`, verify HTTPS/proxy handling and static-file serving. Production settings already enable secure cookies and HTTPS redirects, and both login pages have password-guess limits. Run Django's deployment checks, arrange private persistent database storage and backups, and review deployment security. SQLite is suitable for a small household on one machine; don't put its database on a shared network filesystem.
 
-Future work: additional bank-specific CSV mappings/preview, automatic transfer pairing, import batch undo, guided bank reconciliation, richer category trend charts, and a production hosting recipe.
+Future work: additional bank-specific CSV mappings/preview, automatic transfer pairing, import batch undo, guided bank reconciliation, richer category trend charts.
 
 
 ## Reading and maintaining the code
@@ -132,6 +135,10 @@ For the current local setup:
 
 Do not delete the database, run `flush`, or reload demo data during an upgrade. `migrate` updates the existing database; it does not create a fresh budget. If an upgrade fails, keep the app stopped, restore the backup and restore the corresponding older application version. Do not assume old application code can safely read a newer database schema.
 
-For future Docker hosting, place the database in a persistent volume or bind-mounted data directory outside the image and keep `DATABASE_PATH` pointed there. Rebuilding/replacing a container should replace only code. Never remove the data volume as part of an upgrade. This deployment configuration will be added when we choose the host.
+The supplied Docker setup mounts `./data` at `/data` and uses `DATABASE_PATH=/data/db.sqlite3`. Rebuilding/replacing the app container replaces only code. Caddy certificates persist in separate named volumes. Follow [the Docker upgrade steps](docs/DOCKER.md#7-back-up-and-upgrade-without-losing-data); never delete the data directory or certificate volumes during an upgrade.
 
 The credit-card importer upgrade has an automated migration test that creates a budget under the previous schema, applies the upgrade, and verifies the accounts, categories, transactions, original budget and allocations are retained.
+
+The category schedule upgrade preserves accounts, transactions and category assignments. It removes only the old category-to-account link and adds yearly schedules. Existing categories appear without a schedule until you set one on the Categories page.
+
+Income entries have an optional **Income budget month**. For example, a salary received on 31 July can fund August: cash increases in July, while budget income less spending counts it in August. Leave blank to use the payment month. December income can fund January of the next year. Repeating planned income keeps the same month offset, and matching imported income to a plan retains the plan’s chosen budget month. Existing income is unchanged until you choose a month.

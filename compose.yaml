@@ -1,0 +1,72 @@
+name: twelveandme
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    environment:
+      DEBUG: "0"
+      SECRET_KEY: ${SECRET_KEY:?Set a random SECRET_KEY in .env}
+      ALLOWED_HOSTS: ${BUDGET_HOST:-budget.home}
+      DATABASE_PATH: /data/db.sqlite3
+      TRUST_CADDY: "1"
+    volumes:
+      - ./data:/data
+    # No published app port: clients must go through Caddy.
+    networks:
+      - backend
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    healthcheck:
+      test: ["CMD", "python", "-c", "import os,urllib.request; r=urllib.request.Request('http://127.0.0.1:8000/accounts/login/',headers={'Host':os.environ['ALLOWED_HOSTS'],'X-Forwarded-Proto':'https'}); urllib.request.urlopen(r,timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    environment:
+      BUDGET_HOST: ${BUDGET_HOST:-budget.home}
+      HTTPS_PORT: ${HTTPS_PORT:-9443}
+    ports:
+      # Must be the server's LAN IPv4 address; never bind all interfaces by default.
+      - "${LAN_IP:?Set the Linux server LAN_IP in .env}:${HTTP_PORT:-9080}:80"
+      - "${LAN_IP:?Set the Linux server LAN_IP in .env}:${HTTPS_PORT:-9443}:443"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - backend
+      - edge
+    depends_on:
+      app:
+        condition: service_healthy
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  backend:
+    internal: true
+  edge:
+
+volumes:
+  # Keep the certificate authority between container rebuilds.
+  caddy_data:
+  caddy_config:

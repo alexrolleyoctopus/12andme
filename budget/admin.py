@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.forms.models import BaseInlineFormSet
 from django.core.exceptions import ValidationError
-from .models import Account, Category, YearPlan, Entry, Allocation
+from .models import Account, Category, YearPlan, Entry, Allocation, CategorySchedule
 
 
 class SplitFormSet(BaseInlineFormSet):
@@ -40,3 +40,22 @@ class EntryAdmin(admin.ModelAdmin):
 
 admin.site.register([Account, Category, YearPlan])
 admin.site.site_header = "12and.me · Manage budget"
+
+
+@admin.register(CategorySchedule)
+class CategoryScheduleAdmin(admin.ModelAdmin):
+    list_display = [
+        "category",
+        "year_plan",
+        "amount_cents",
+        "frequency",
+        "due_month",
+        "due_day",
+    ]
+    list_filter = ["year_plan", "frequency"]
+    readonly_fields = [
+        "original_amount_cents",
+        "original_frequency",
+        "original_due_month",
+        "original_due_day",
+    ]

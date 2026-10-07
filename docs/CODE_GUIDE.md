@@ -35,6 +35,7 @@ The app uses regular Django patterns and server-rendered HTML. There is no separ
 
 - **Model:** a Python class describing a database table. An instance is one row.
 - **Entry:** one planned or actual income, expense or internal transfer.
+- **CategorySchedule:** one category’s amount, recurrence and due dates for a budget year. It has no bank account.
 - **Allocation:** the part of an entry assigned to a category.
 - **ForeignKey:** a reference to another record; for example, an entry's account.
 - **QuerySet:** a database query such as `Entry.objects.filter(actual=True)`.
@@ -51,6 +52,8 @@ An entry starts as planned (`actual=False`) or actual (`actual=True`). Planned e
 
 For buckets, `remaining_allowances()` subtracts separately recorded actual purchases from the same month's remaining planned allowance, matching by account and category. `monthly_cash()` calculates the primary account. `category_spending()` compares original, actual and forecast spending. Transfers appear in cash flow but not spending totals.
 
+A category schedule supplies its original budget and current expected spending per due month. Open-month spending forecasts use the larger of this expected amount and entry-based spending; closed months use actual spending. Schedules never create bank movements, so primary cash still comes entirely from entries. The original schedule is retained when edited, and schedules for different years are independent.
+
 Closed months use actual movements only. They are not automatically closed based on today's date: you choose when the imported records are complete.
 
 ## Safe ways to make changes
@@ -64,3 +67,5 @@ For model changes, run `python manage.py makemigrations` and review the generate
 Keep Django's password hashing, login handling, HTML escaping and CSRF tokens in place. Avoid adding `|safe` to imported descriptions, raw SQL built from user input, or your own password storage.
 
 The security tools are optional development dependencies; they are not needed to run the app. Formatting expands compressed statements into conventional Python and HTML without introducing a new application architecture.
+
+Income can optionally set `Entry.income_month`, stored as the first day of the chosen month. A blank value uses the transaction month. Reports query budget income separately so December pay allocated to January appears in the next year’s spending comparison, while cash remains in December. Recurring entries preserve the month offset; imported transactions matched to a plan keep its income month.

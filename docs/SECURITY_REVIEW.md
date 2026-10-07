@@ -50,3 +50,10 @@ CSV transfer pairing, import batch undo and guided reconciliation remain starter
 - [Django deployment checklist](https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/)
 - [Django Axes installation](https://django-axes.readthedocs.io/en/latest/2_installation.html)
 - [Django Axes configuration](https://django-axes.readthedocs.io/en/latest/4_configuration.html)
+
+
+## Home-server deployment addition — 7 October 2026
+
+The repository now includes Docker Compose, Gunicorn, WhiteNoise and Caddy local HTTPS. The app runs as non-root with a read-only container filesystem and a persistent writable data mount; its port is not published. Only Caddy publishes ports, bound to the configured LAN address. Caddy limits bodies to 3 MB and overwrites the scheme and dedicated client-IP headers before forwarding. `TRUST_CADDY=1` opts into trusting those headers only for the supplied private-network deployment. Keep the app port private; enabling this setting on a directly exposed app would allow header spoofing.
+
+The original proxy/body-limit follow-ups above are addressed by this configuration, but must still be verified on the actual server. Docker was unavailable in the authoring environment, so no container build, image vulnerability scan or live Caddy/TLS integration test was performed there. See `DOCKER.md` for server-side validation and certificate trust. Local Python tests and runtime-dependency audits do not cover the base operating-system or Caddy image.

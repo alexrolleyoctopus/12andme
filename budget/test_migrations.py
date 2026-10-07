@@ -15,6 +15,7 @@ class CardUpgradeTests(TransactionTestCase):
         ]
         new = [("budget", "0003_entry_bank_category_entry_bank_merchant_and_more")]
         executor = MigrationExecutor(connection)
+        latest = executor.loader.graph.leaf_nodes()
         executor.migrate(old)
         try:
             apps = executor.loader.project_state(old).apps
@@ -62,4 +63,55 @@ class CardUpgradeTests(TransactionTestCase):
                 category.pk,
             )
         finally:
-            MigrationExecutor(connection).migrate(new)
+            MigrationExecutor(connection).migrate(latest)
+
+
+class CategoryUpgradeTests(TransactionTestCase):
+    def test_category_upgrade_preserves_existing_records(self):
+        old = [("budget", "0003_entry_bank_category_entry_bank_merchant_and_more")]
+        executor = MigrationExecutor(connection)
+        latest = executor.loader.graph.leaf_nodes()
+        executor.migrate(old)
+        try:
+            apps = executor.loader.project_state(old).apps
+            account = apps.get_model("budget", "Account").objects.create(
+                name="Existing card"
+            )
+            category = apps.get_model("budget", "Category").objects.create(
+                name="Existing fuel", account=account
+            )
+            entry = apps.get_model("budget", "Entry").objects.create(
+                date="2026-07-01",
+                description="Fuel purchase",
+                kind="expense",
+                account=account,
+                amount_cents=6000,
+                original_cents=7000,
+                actual=True,
+            )
+            allocation = apps.get_model("budget", "Allocation").objects.create(
+                entry=entry, category=category, amount_cents=6000, original_cents=7000
+            )
+            executor = MigrationExecutor(connection)
+            executor.migrate(latest)
+            apps = executor.loader.project_state(latest).apps
+            self.assertEqual(
+                apps.get_model("budget", "Category").objects.get(pk=category.pk).name,
+                "Existing fuel",
+            )
+            saved = apps.get_model("budget", "Entry").objects.get(pk=entry.pk)
+            self.assertEqual(saved.account_id, account.pk)
+            self.assertEqual(saved.amount_cents, 6000)
+            self.assertEqual(saved.original_cents, 7000)
+            self.assertTrue(saved.actual)
+            saved_split = apps.get_model("budget", "Allocation").objects.get(
+                pk=allocation.pk
+            )
+            self.assertEqual(saved_split.category_id, category.pk)
+            self.assertEqual(saved_split.amount_cents, 6000)
+            self.assertEqual(saved_split.original_cents, 7000)
+            self.assertEqual(
+                apps.get_model("budget", "CategorySchedule").objects.count(), 0
+            )
+        finally:
+            MigrationExecutor(connection).migrate(latest)

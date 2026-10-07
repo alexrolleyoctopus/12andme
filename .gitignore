@@ -8,3 +8,5 @@ staticfiles/
 .DS_Store
 .local-secret
 .audit-cache/
+caddy-root.crt
+backups/

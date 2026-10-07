@@ -4,6 +4,8 @@ Entry means one planned or actual money movement. Allocation is its category spl
 Money is stored as integer cents so calculations never use floating-point amounts.
 """
 
+import calendar
+from datetime import date
 from django.db import models
 from django.core.exceptions import ValidationError
 from django.core.validators import MinValueValidator, MaxValueValidator
@@ -35,7 +37,6 @@ class Account(models.Model):
 
 class Category(models.Model):
     name = models.CharField(max_length=100, unique=True)
-    account = models.ForeignKey(Account, on_delete=models.PROTECT)
 
     def __str__(self):
         return self.name
@@ -58,6 +59,74 @@ class YearPlan(models.Model):
         return str(self.year)
 
 
+class CategorySchedule(models.Model):
+    """One category's spending plan for one year, independent of bank accounts."""
+
+    FREQUENCIES = [
+        ("monthly", "Monthly"),
+        ("quarterly", "Quarterly"),
+        ("six_monthly", "Every six months"),
+        ("annual", "Annual"),
+    ]
+    MONTHS = [(month, calendar.month_name[month]) for month in range(1, 13)]
+    category = models.ForeignKey(
+        Category, on_delete=models.CASCADE, related_name="schedules"
+    )
+    year_plan = models.ForeignKey(
+        YearPlan, on_delete=models.CASCADE, related_name="category_schedules"
+    )
+    amount_cents = models.PositiveBigIntegerField(
+        validators=[MinValueValidator(1), MaxValueValidator(999999999999)]
+    )
+    frequency = models.CharField(max_length=12, choices=FREQUENCIES)
+    due_month = models.PositiveSmallIntegerField(default=1, choices=MONTHS)
+    due_day = models.PositiveSmallIntegerField(
+        default=1, validators=[MinValueValidator(1), MaxValueValidator(31)]
+    )
+    # Keep the initial schedule for planned-versus-actual comparisons after edits.
+    original_amount_cents = models.PositiveBigIntegerField(editable=False)
+    original_frequency = models.CharField(max_length=12, editable=False)
+    original_due_month = models.PositiveSmallIntegerField(editable=False)
+    original_due_day = models.PositiveSmallIntegerField(editable=False)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["category", "year_plan"], name="one_category_schedule_per_year"
+            )
+        ]
+
+    def save(self, *args, **kwargs):
+        if self.pk is None:
+            for field in ("amount_cents", "frequency", "due_month", "due_day"):
+                setattr(self, "original_" + field, getattr(self, field))
+        super().save(*args, **kwargs)
+
+    def due_dates(self, original=False):
+        """Generate due dates in this year; day 31 clamps to shorter month ends."""
+        prefix = "original_" if original else ""
+        frequency = getattr(self, prefix + "frequency")
+        day = getattr(self, prefix + "due_day")
+        first_month = (
+            1 if frequency == "monthly" else getattr(self, prefix + "due_month")
+        )
+        interval = {"monthly": 1, "quarterly": 3, "six_monthly": 6, "annual": 12}[
+            frequency
+        ]
+        year = self.year_plan.year
+        return [
+            date(year, month, min(day, calendar.monthrange(year, month)[1]))
+            for month in range(first_month, 13, interval)
+        ]
+
+    def monthly_amounts(self, original=False):
+        amount = self.original_amount_cents if original else self.amount_cents
+        return {due.month: amount for due in self.due_dates(original)}
+
+    def __str__(self):
+        return f"{self.category} · {self.year_plan}"
+
+
 class Entry(models.Model):
     KINDS = [
         ("income", "Income"),
@@ -67,6 +136,11 @@ class Entry(models.Model):
         ("transfer", "Internal transfer"),
     ]
     date = models.DateField()
+    income_month = models.DateField(
+        null=True,
+        blank=True,
+        help_text="Income budget month (use its first day). Blank uses the payment month.",
+    )
     description = models.CharField(max_length=200)
     kind = models.CharField(max_length=20, choices=KINDS)
     account = models.ForeignKey(
@@ -100,6 +174,15 @@ class Entry(models.Model):
         ordering = ["date", "pk"]
 
     def clean(self):
+        if self.income_month:
+            if self.kind != "income":
+                raise ValidationError(
+                    {"income_month": "Only income can have a budget month."}
+                )
+            if self.income_month.day != 1 or not 2000 <= self.income_month.year <= 2100:
+                raise ValidationError(
+                    {"income_month": "Choose a month between 2000 and 2100."}
+                )
         if self.date and not 2000 <= self.date.year <= 2100:
             raise ValidationError({"date": "Choose a date between 2000 and 2100."})
         if self.kind == "transfer" and (

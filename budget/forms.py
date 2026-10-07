@@ -4,7 +4,7 @@ import calendar
 from datetime import timedelta
 from decimal import Decimal
 from django import forms
-from .models import Account, Category, YearPlan, Entry, Allocation
+from .models import Account, Category, YearPlan, Entry, Allocation, CategorySchedule
 
 
 class AccountForm(forms.ModelForm):
@@ -14,9 +14,75 @@ class AccountForm(forms.ModelForm):
 
 
 class CategoryForm(forms.ModelForm):
+    """Edit a category and its selected year's schedule together."""
+
+    year_plan = forms.ModelChoiceField(
+        queryset=YearPlan.objects.order_by("year"), label="Budget year"
+    )
+    amount = forms.DecimalField(
+        decimal_places=2,
+        max_digits=12,
+        min_value=Decimal("0.01"),
+        label="Amount per occurrence ($)",
+    )
+    frequency = forms.ChoiceField(
+        choices=CategorySchedule.FREQUENCIES, label="Recurrence"
+    )
+    due_month = forms.TypedChoiceField(
+        choices=CategorySchedule.MONTHS,
+        coerce=int,
+        initial=1,
+        label="First due month",
+        help_text="Ignored for monthly schedules. Other schedules start in this month and repeat through December.",
+    )
+    due_day = forms.IntegerField(
+        min_value=1,
+        max_value=31,
+        initial=1,
+        label="Day of month",
+        help_text="If this day does not exist in a month, use that month's last day.",
+    )
+
     class Meta:
         model = Category
-        fields = ["name", "account"]
+        fields = ["name"]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        year_plan = self.initial.get("year_plan")
+        if self.instance.pk and year_plan:
+            schedule = CategorySchedule.objects.filter(
+                category=self.instance, year_plan=year_plan
+            ).first()
+            if schedule:
+                self.initial.update(
+                    amount=Decimal(schedule.amount_cents) / 100,
+                    frequency=schedule.frequency,
+                    due_month=schedule.due_month,
+                    due_day=schedule.due_day,
+                )
+
+    def save(self, commit=True):
+        if not commit:
+            raise ValueError(
+                "CategoryForm saves its annual schedule together; commit=False is not supported."
+            )
+        category = super().save(commit)
+        schedule = CategorySchedule.objects.filter(
+            category=category, year_plan=self.cleaned_data["year_plan"]
+        ).first()
+        if schedule is None:
+            schedule = CategorySchedule(
+                category=category, year_plan=self.cleaned_data["year_plan"]
+            )
+        schedule.amount_cents = int(self.cleaned_data["amount"] * 100)
+        schedule.frequency = self.cleaned_data["frequency"]
+        schedule.due_month = (
+            self.cleaned_data["due_month"] if schedule.frequency != "monthly" else 1
+        )
+        schedule.due_day = self.cleaned_data["due_day"]
+        schedule.save()
+        return category
 
 
 class YearForm(forms.ModelForm):
@@ -34,6 +100,14 @@ class YearForm(forms.ModelForm):
 
 
 class EntryForm(forms.ModelForm):
+    income_month = forms.DateField(
+        required=False,
+        input_formats=["%Y-%m"],
+        widget=forms.DateInput(format="%Y-%m", attrs={"type": "month"}),
+        label="Income budget month",
+        help_text="For income only. Leave blank to use the payment month. Cash still arrives on the transaction date. Repeated income keeps the same month offset.",
+    )
+
     repeat = forms.ChoiceField(
         required=False,
         choices=[
@@ -56,7 +130,15 @@ class EntryForm(forms.ModelForm):
 
     class Meta:
         model = Entry
-        fields = ["date", "description", "kind", "account", "destination", "actual"]
+        fields = [
+            "date",
+            "description",
+            "kind",
+            "income_month",
+            "account",
+            "destination",
+            "actual",
+        ]
         widgets = {"date": forms.DateInput(attrs={"type": "date"})}
 
     def clean(self):
@@ -151,8 +233,20 @@ class EntryForm(forms.ModelForm):
                 )
             if current.year != entry.date.year:
                 break
+            income_month = None
+            if entry.income_month:
+                offset = (
+                    (entry.income_month.year - entry.date.year) * 12
+                    + entry.income_month.month
+                    - entry.date.month
+                )
+                target = current.year * 12 + current.month - 1 + offset
+                income_month = current.replace(
+                    year=target // 12, month=target % 12 + 1, day=1
+                )
             clone = Entry.objects.create(
                 date=current,
+                income_month=income_month,
                 description=entry.description,
                 kind=entry.kind,
                 account=entry.account,

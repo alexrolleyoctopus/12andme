@@ -74,7 +74,7 @@ bank-002,2026-07-15,Salary,4500.00
 
 Amounts use dollars, negative for outflows and positive for inflows. Dates use YYYY-MM-DD. Each row needs a stable identifier unique within its account. Reimporting the same account/ID skips the row; changed data with that ID is also skipped. Invalid rows roll back the whole upload. Maximum upload is 2 MB or 5,000 rows.
 
-Imported entries initially have no categories. Use **Edit** to categorise bucket purchases or identify transfers. Use **Match plan** for individual planned payments, salaries and transfers. If split amounts differ, adjust the planned entry and splits first, then match. Matching keeps the bank date, actual amount, import identifier, original budget and planned categories.
+Imported entries initially have no categories. In **Money movements**, use **Assign category** beside a transaction, choose a category from the dropdown, and save to assign its full amount. Use **Edit / split** for multiple categories or to identify transfers. Reassigning a transaction preserves any original planned budget. Use **Match plan** for individual planned payments, salaries and transfers. If split amounts differ, adjust the planned entry and splits first, then match. Matching keeps the bank date, actual amount, import identifier, original budget and planned categories.
 
 **Important:** Transfers imported from both accounts are two bank records for one movement. This starter does not automatically pair those records. Keep one transfer with source and destination and remove the duplicate counterpart in Manage. Otherwise income/cash totals can be overstated. Review imported entries before relying on the forecast. Import batch undo is not implemented; individual entries can be removed in Manage.
 

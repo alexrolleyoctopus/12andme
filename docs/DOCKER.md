@@ -6,7 +6,7 @@ This setup runs two containers: Gunicorn/Django serves the app and static files;
 
 Install Docker Engine and its Compose plugin using [Docker's Linux instructions](https://docs.docker.com/engine/install/). These commands assume your account can run `docker`; otherwise prefix Docker commands with `sudo`. Access to the Docker daemon is effectively administrative access.
 
-Give the server a fixed/reserved LAN IPv4 address. The example below uses `192.168.1.50`; replace it with yours. Ports 80 and 443 must be free on that address.
+Give the server a fixed/reserved LAN IPv4 address. The example below uses `192.168.2.57`; replace it with yours. The default host ports are 9080 (HTTP) and 9443 (HTTPS). You can choose different free ports in `.env` as described below.
 
 Clone this repository onto the server and run all commands from its directory. Then:
 
@@ -16,7 +16,7 @@ chmod 600 .env
 python3 -c 'import secrets; print(secrets.token_urlsafe(64))'
 ```
 
-Edit `.env`: set `LAN_IP` to your server's LAN address, keep `BUDGET_HOST=budget.home.arpa` unless you prefer another local hostname, and paste the generated value into `SECRET_KEY`. Keep that secret stable during upgrades. Do not commit `.env` or show the output of `docker compose config` publicly because it contains resolved secrets.
+Edit `.env`: set `LAN_IP` to your server's LAN address, keep `BUDGET_HOST=budget.home` unless you prefer another local hostname, and paste the generated value into `SECRET_KEY`. Keep that secret stable during upgrades. Do not commit `.env` or show the output of `docker compose config` publicly because it contains resolved secrets.
 
 Create the app's persistent directory with permissions for its non-root container user:
 
@@ -26,17 +26,37 @@ sudo install -d -m 700 -o 10001 -g 10001 data
 
 The UID/GID `10001` matches the Dockerfile. Do not use `chmod 777`. Use a local disk, not a network share, for SQLite.
 
+### Using non-standard ports
+
+If another service already uses port 80 or 443, set these in `.env`:
+
+```dotenv
+HTTP_PORT=9080
+HTTPS_PORT=9443
+```
+
+Keep `BUDGET_HOST` as a hostname without a port. Compose maps the chosen host ports to Caddy's internal ports 80/443. Caddy's explicit HTTP redirect uses `HTTPS_PORT`, so `http://budget.home:9080` redirects to `https://budget.home:9443` with its path and query preserved. HTTPS port 9443 must appear in the URL you use. The same root certificate remains valid; certificates identify hostnames, not ports.
+
+After updating `.env` and obtaining the current `compose.yaml` and `deploy/Caddyfile`, run:
+
+```sh
+docker compose config --quiet
+docker compose up -d --force-recreate app caddy
+```
+
+No image rebuild or database migration is needed for this port/hostname change. Recreate both services when changing the hostname so Django’s allowed hostname updates too. Existing `.env` values override defaults: set `BUDGET_HOST=budget.home`, `HTTP_PORT=9080`, and `HTTPS_PORT=9443` explicitly on the server. Update LAN firewall rules for the ports you select. Use `:9443` in the address when using these defaults.
+
 ## 2. Make the local name resolve
 
 Add a local DNS record in your router, Pi-hole or other home DNS server:
 
 ```text
-budget.home.arpa → 192.168.1.50
+budget.home → 192.168.2.57
 ```
 
-If your router cannot do this, add `192.168.1.50 budget.home.arpa` to each computer's hosts file. Phones generally need working local DNS. No public DNS or router port forwarding is required. Devices using an external/private DNS service may need to use your home DNS to resolve this name.
+If your router cannot do this, add `192.168.2.57 budget.home` to each computer's hosts file. Phones generally need working local DNS. No public DNS or router port forwarding is required. Devices using an external/private DNS service may need to use your home DNS to resolve this name.
 
-Only the chosen LAN address publishes ports 80 and 443. Do not configure WAN forwarding. Keep the server firewall restricted to your LAN; Docker-published ports have their own firewall behaviour, so do not assume a generic UFW rule alone blocks them. See [Docker's firewall documentation](https://docs.docker.com/engine/network/packet-filtering-firewalls/).
+Only the chosen LAN address publishes the configured HTTP and HTTPS ports. Do not configure WAN forwarding. Keep the server firewall restricted to your LAN; Docker-published ports have their own firewall behaviour, so do not assume a generic UFW rule alone blocks them. See [Docker's firewall documentation](https://docs.docker.com/engine/network/packet-filtering-firewalls/).
 
 ## 3. Choose an existing or new budget
 
@@ -73,7 +93,7 @@ docker compose up -d
 docker compose ps
 ```
 
-Caddy waits for the app's health check to pass. Visit `https://budget.home.arpa` after trusting the certificate below. The application port is not published; do not add a port mapping for app:8000, as Django trusts headers supplied by Caddy on this private network.
+Caddy waits for the app's health check to pass. Visit `https://budget.home:9443` after trusting the certificate below. The application port is not published; do not add a port mapping for app:8000, as Django trusts headers supplied by Caddy on this private network.
 
 ## 5. Trust Caddy's local certificate authority
 
@@ -144,6 +164,8 @@ For rollback, stop the app, restore the database backup to `data/db.sqlite3` wit
 - **502 from Caddy:** app may be starting, stopped for an upgrade, or unhealthy.
 - **Certificate warning:** check DNS, hostname and certificate trust. Access using the configured hostname rather than an IP address.
 - **Redirect loop:** use the supplied private network/Caddy header settings; don't expose the app directly.
-- **Address already in use:** another service owns port 80/443. Resolve that conflict rather than starting a second proxy on those ports.
+- **Cannot assign requested address:** `LAN_IP` is not assigned to the Linux host. Check `ip -4 addr show` and correct `.env`; changing ports alone will not fix this.
+- **Still binding port 80 on the host:** ensure the server has the updated `compose.yaml`, not an older hardcoded port mapping.
+- **Address already in use:** another service owns the selected port. Set free `HTTP_PORT` and `HTTPS_PORT` values in `.env` and recreate Caddy as described above.
 
 The container files were added in an environment without Docker Engine, so the image build and Caddy runtime validation must be completed on the Linux server. Application tests cover the trusted-header configuration; they do not replace an end-to-end deployment check.

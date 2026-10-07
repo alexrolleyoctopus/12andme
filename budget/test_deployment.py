@@ -31,15 +31,15 @@ class CaddyDeploymentTests(SimpleTestCase):
     @override_settings(
         SECURE_SSL_REDIRECT=True,
         SECURE_PROXY_SSL_HEADER=("HTTP_X_FORWARDED_PROTO", "https"),
-        ALLOWED_HOSTS=["budget.home.arpa"],
+        ALLOWED_HOSTS=["budget.home"],
     )
     def test_https_from_caddy_does_not_redirect_forever(self):
         middleware = SecurityMiddleware(lambda request: HttpResponse("ok"))
         request = RequestFactory().get(
-            "/", HTTP_HOST="budget.home.arpa", HTTP_X_FORWARDED_PROTO="https"
+            "/", HTTP_HOST="budget.home", HTTP_X_FORWARDED_PROTO="https"
         )
         self.assertEqual(middleware(request).status_code, 200)
-        request = RequestFactory().get("/", HTTP_HOST="budget.home.arpa")
+        request = RequestFactory().get("/", HTTP_HOST="budget.home")
         response = middleware(request)
         self.assertEqual(response.status_code, 301)
-        self.assertEqual(response["Location"], "https://budget.home.arpa/")
+        self.assertEqual(response["Location"], "https://budget.home/")

@@ -6,7 +6,7 @@ services:
     environment:
       DEBUG: "0"
       SECRET_KEY: ${SECRET_KEY:?Set a random SECRET_KEY in .env}
-      ALLOWED_HOSTS: ${BUDGET_HOST:-budget.home.arpa}
+      ALLOWED_HOSTS: ${BUDGET_HOST:-budget.home}
       DATABASE_PATH: /data/db.sqlite3
       TRUST_CADDY: "1"
     volumes:
@@ -37,11 +37,12 @@ services:
     image: caddy:2-alpine
     restart: unless-stopped
     environment:
-      BUDGET_HOST: ${BUDGET_HOST:-budget.home.arpa}
+      BUDGET_HOST: ${BUDGET_HOST:-budget.home}
+      HTTPS_PORT: ${HTTPS_PORT:-9443}
     ports:
       # Must be the server's LAN IPv4 address; never bind all interfaces by default.
-      - "${LAN_IP:?Set the Linux server LAN_IP in .env}:80:80"
-      - "${LAN_IP:?Set the Linux server LAN_IP in .env}:443:443"
+      - "${LAN_IP:?Set the Linux server LAN_IP in .env}:${HTTP_PORT:-9080}:80"
+      - "${LAN_IP:?Set the Linux server LAN_IP in .env}:${HTTPS_PORT:-9443}:443"
     volumes:
       - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data

@@ -1,4 +1,13 @@
-{$BUDGET_HOST:budget.home.arpa} {
+{
+    # Explicit redirect below knows the externally published HTTPS port.
+    auto_https disable_redirects
+}
+
+http://{$BUDGET_HOST:budget.home} {
+    redir https://{$BUDGET_HOST:budget.home}:{$HTTPS_PORT:9443}{uri} 308
+}
+
+https://{$BUDGET_HOST:budget.home} {
     # Private home-network HTTPS; no public domain or ACME service required.
     tls internal
     encode gzip

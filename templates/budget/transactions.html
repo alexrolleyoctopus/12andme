@@ -17,8 +17,8 @@
 </nav>
 <p class="muted">Choose a category and save on the transaction’s row. This assigns the full amount and replaces existing splits. Use Edit / split to divide the amount between categories.</p>
 <section class="panel">
-<div class="tablewrap"><table>
-<thead><tr><th>Date</th><th>Transaction</th><th>Account</th><th>Amount</th><th>Current categories</th><th>Assign category</th><th></th></tr></thead>
+<div class="tablewrap"><table class="transactions-table">
+<thead><tr><th>Date</th><th>Transaction</th><th>Account</th><th>Amount</th><th>Current categories</th><th>Assign category</th></tr></thead>
 <tbody>
 {% for row in rows %}
 <tr id="transaction-{{ row.entry.pk }}">
@@ -30,17 +30,17 @@
     <td>{{ row.entry.account }}{% if row.entry.destination %} → {{ row.entry.destination }}{% endif %}</td>
     <td>{{ row.entry.amount_cents|money }}</td>
     <td>{% for allocation in row.allocations %}<small>{{ allocation.category }} {{ allocation.amount_cents|money }}</small>{% empty %}Uncategorised{% endfor %}</td>
-    <td><form method="post" action="?month={{ month|date:'Y-m' }}#transaction-{{ row.entry.pk }}">
+    <td><form class="transaction-category-form" method="post" action="?month={{ month|date:'Y-m' }}#transaction-{{ row.entry.pk }}">
         {% csrf_token %}
         <input type="hidden" name="entry" value="{{ row.entry.pk }}">
         {{ row.form.category.errors }}
         <label for="{{ row.form.category.id_for_label }}">Category for {{ row.entry.description }}</label>
         {{ row.form.category }}
         <button>Save category</button>
-    </form></td>
-    <td><a href="/entry/{{ row.entry.pk }}/edit/">Edit / split</a></td>
+    </form>
+    <a class="transaction-edit" href="/entry/{{ row.entry.pk }}/edit/">Edit / split</a></td>
 </tr>
-{% empty %}<tr><td colspan="7">No transactions this month. Choose another month or <a href="/import/">import a CSV</a>.</td></tr>{% endfor %}
+{% empty %}<tr><td colspan="6">No transactions this month. Choose another month or <a href="/import/">import a CSV</a>.</td></tr>{% endfor %}
 </tbody>
 </table></div>
 </section>

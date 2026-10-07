@@ -52,7 +52,7 @@ class CardImportTests(TestCase):
     def setUp(self):
         self.bank = Account.objects.create(name="Everyday", primary=True)
         self.card = Account.objects.create(name="Card")
-        self.food = Category.objects.create(name="Food", account=self.card)
+        self.food = Category.objects.create(name="Food")
         self.year = YearPlan.objects.create(year=2026, opening_cents=100000)
         self.user = User.objects.create_user("import-test")
         self.client.force_login(

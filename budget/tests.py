@@ -11,7 +11,7 @@ class BudgetTests(TestCase):
     def setUp(self):
         self.bank = Account.objects.create(name="Bank", primary=True)
         self.card = Account.objects.create(name="Card")
-        self.food = Category.objects.create(name="Food", account=self.card)
+        self.food = Category.objects.create(name="Food")
         self.plan = YearPlan.objects.create(year=2026, opening_cents=200000)
         self.user = User.objects.create_user("alex", password="test-secret-123")
 

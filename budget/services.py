@@ -8,6 +8,7 @@ import calendar
 from decimal import Decimal
 from collections import defaultdict
 from .models import Entry, Category
+from django.db.models import Q
 
 
 def report(plan):
@@ -18,8 +19,19 @@ def report(plan):
         .prefetch_related("allocations__category")
     )
     effective_amounts, remaining_by_category = remaining_allowances(entries)
-    months = monthly_cash(plan, entries, effective_amounts)
+    income_entries = Entry.objects.filter(kind="income").filter(
+        Q(income_month__year=plan.year)
+        | Q(income_month__isnull=True, date__year=plan.year)
+    )
+    months = monthly_cash(plan, entries, effective_amounts, income_entries)
     categories = category_spending(plan, entries, remaining_by_category)
+    # Category schedules replace (rather than add to) their transaction-based
+    # spending forecasts. Primary-account cash remains based on real account flows.
+    for index, month in enumerate(months):
+        adjustment = sum(
+            category["cells"][index]["forecast_adjustment"] for category in categories
+        )
+        month["spending_net"] -= adjustment
     return months, categories, entries
 
 
@@ -56,8 +68,10 @@ def remaining_allowances(entries):
     return effective_amounts, remaining_by_category
 
 
-def monthly_cash(plan, entries, effective_amounts):
+def monthly_cash(plan, entries, effective_amounts, income_entries=None):
     """Carry primary-account cash forward, using actuals in closed months."""
+    if income_entries is None:
+        income_entries = [entry for entry in entries if entry.kind == "income"]
     balance = plan.opening_cents
     months = []
     for month in range(1, 13):
@@ -67,11 +81,16 @@ def monthly_cash(plan, entries, effective_amounts):
             if entry.date.month == month
             and (entry.actual or month > plan.closed_through)
         ]
-        incoming = outgoing = earned = spent = 0
+        incoming = outgoing = spent = 0
+        earned = sum(
+            entry.amount_cents
+            for entry in income_entries
+            if (entry.income_month or entry.date).year == plan.year
+            and (entry.income_month or entry.date).month == month
+            and (entry.actual or month > plan.closed_through)
+        )
         for entry in active:
             amount = effective_amounts[entry.pk]
-            if entry.kind == "income":
-                earned += amount
             if entry.kind == "expense":
                 spent += amount
             if entry.kind == "refund":
@@ -104,12 +123,19 @@ def monthly_cash(plan, entries, effective_amounts):
 def category_spending(plan, entries, remaining_by_category):
     """Compare the original budget with actual and forecast spending."""
     categories = []
+    schedules = {
+        schedule.category_id: schedule
+        for schedule in plan.category_schedules.select_related("year_plan")
+    }
     actual_signs = {
         entry.pk: (-1 if entry.kind == "refund" else 1)
         for entry in entries
         if entry.actual
     }
     for category in Category.objects.all():
+        schedule = schedules.get(category.pk)
+        budgets = schedule.monthly_amounts(original=True) if schedule else {}
+        expected = schedule.monthly_amounts() if schedule else {}
         cells = []
         for month in range(1, 13):
             allocations = [
@@ -130,6 +156,11 @@ def category_spending(plan, entries, remaining_by_category):
                 if month > plan.closed_through
                 else 0
             )
+            entry_forecast = forecast
+            if schedule:
+                original = budgets.get(month, 0)
+                if month > plan.closed_through:
+                    forecast = max(forecast, expected.get(month, 0))
             cells.append(
                 dict(
                     budget=original / Decimal(100),
@@ -137,7 +168,15 @@ def category_spending(plan, entries, remaining_by_category):
                     forecast=forecast / Decimal(100),
                     remaining=(original - actual) / Decimal(100),
                     over=actual > original,
+                    forecast_adjustment=(forecast - entry_forecast) / Decimal(100),
                 )
             )
-        categories.append(dict(name=category.name, cells=cells))
+        categories.append(
+            dict(
+                id=category.pk,
+                name=category.name,
+                cells=cells,
+                scheduled=bool(schedule),
+            )
+        )
     return categories

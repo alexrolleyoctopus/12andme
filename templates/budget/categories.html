@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% load money %}
+{% block content %}
+    <div class="heading">
+        <div>
+            <p class="eyebrow">PLAN YOUR SPENDING</p>
+            <h1>Categories</h1>
+            <p class="muted">One amount and schedule per category, per budget year. Spend from any account.</p>
+        </div>
+        <form method="get"><label for="year">Budget year</label><select name="year" id="year">{% for item in plans %}<option {% if item.year == year %}selected{% endif %}>{{ item.year }}</option>{% empty %}<option>{{ year }}</option>{% endfor %}</select><button>View</button></form>
+    </div>
+    <div class="actions"><a class="button"
+   href="/add/category/?year={{ year }}">+ Category</a><a href="/?year={{ year }}">View annual budget</a></div>
+    {% if not plan %}<p class="notice">First <a href="/add/year/">add a budget year</a> to set category amounts and schedules.</p>{% endif %}
+    <p class="notice">Schedules define spending budgets. Add planned payments or funding transfers with their accounts to forecast primary-account cash. Changing a category schedule does not change those money movements.</p>
+    <section class="panel">
+        <div class="tablewrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Category</th>
+                        <th>Amount per occurrence</th>
+                        <th>Recurrence</th>
+                        <th>Due dates · {{ year }}</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>{% for row in rows %}<tr><td>{{ row.category.name }}</td>
+                    {% if row.schedule %}<td>{{ row.schedule.amount_cents|money }}</td><td>{{ row.schedule.get_frequency_display }}</td><td>{% for due in row.schedule.due_dates %}<small>{{ due|date:'j M' }}</small>{% endfor %}</td>
+                {% else %}<td colspan="3">Schedule not set for this year. Existing transaction-based budgets are retained.</td>{% endif %}
+                <td><a href="/category/{{ row.category.pk }}/edit/?year={{ year }}">{% if row.schedule %}Edit{% else %}Set amount and schedule{% endif %}</a></td></tr>
+        {% empty %}<tr><td colspan="5">Add your first category to start planning.</td></tr>{% endfor %}</tbody>
+</table>
+</div>
+</section>
+{% endblock %}

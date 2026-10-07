@@ -1,7 +1,14 @@
 from datetime import date, timedelta
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
-from budget.models import Account, Category, YearPlan, Entry, Allocation
+from budget.models import (
+    Account,
+    Category,
+    CategorySchedule,
+    YearPlan,
+    Entry,
+    Allocation,
+)
 
 
 class Command(BaseCommand):
@@ -14,10 +21,23 @@ class Command(BaseCommand):
         year = date.today().year
         primary = Account.objects.create(name="Everyday account", primary=True)
         card = Account.objects.create(name="Credit card")
-        food = Category.objects.create(name="Food", account=card)
-        fuel = Category.objects.create(name="Fuel", account=card)
-        registration = Category.objects.create(name="Car registration", account=primary)
-        YearPlan.objects.create(year=year, opening_cents=250000)
+        food = Category.objects.create(name="Food")
+        fuel = Category.objects.create(name="Fuel")
+        registration = Category.objects.create(name="Car registration")
+        plan = YearPlan.objects.create(year=year, opening_cents=250000)
+        for category, amount, frequency, month, day in [
+            (food, 100000, "monthly", 1, 1),
+            (fuel, 30000, "monthly", 1, 1),
+            (registration, 120000, "annual", 7, 12),
+        ]:
+            CategorySchedule.objects.create(
+                category=category,
+                year_plan=plan,
+                amount_cents=amount,
+                frequency=frequency,
+                due_month=month,
+                due_day=day,
+            )
         for month in range(1, 13):
             Entry.objects.create(
                 date=date(year, month, 15),

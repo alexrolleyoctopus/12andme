@@ -20,7 +20,7 @@ class SecurityTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user("tester", password="test-password-123")
         self.account = Account.objects.create(name="Bank", primary=True)
-        self.category = Category.objects.create(name="Food", account=self.account)
+        self.category = Category.objects.create(name="Food")
         self.plan = YearPlan.objects.create(year=2026)
         self.entry = Entry.objects.create(
             date="2026-07-01",

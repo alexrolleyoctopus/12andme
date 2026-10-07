@@ -7,7 +7,7 @@ from django.views.decorators.http import require_POST, require_http_methods
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
 from django.db import transaction
-from .models import YearPlan, Entry, Allocation
+from .models import YearPlan, Entry, Allocation, Category
 from .forms import (
     AccountForm,
     CategoryForm,
@@ -66,11 +66,22 @@ def add(request, kind):
     }
     if kind not in forms:
         return redirect("dashboard")
-    form = forms[kind](request.POST if request.method == "POST" else None)
+    initial = {}
+    if kind == "category":
+        selected_year = request.GET.get("year", str(date.today().year))
+        if selected_year.isdigit() and len(selected_year) == 4:
+            initial["year_plan"] = YearPlan.objects.filter(
+                year=int(selected_year)
+            ).first()
+    form = forms[kind](
+        request.POST if request.method == "POST" else None, initial=initial
+    )
     if request.method == "POST" and form.is_valid():
         with transaction.atomic():
             form.save()
         messages.success(request, "Saved successfully.")
+        if kind == "category":
+            return redirect(f"/categories/?year={form.cleaned_data['year_plan'].year}")
         return redirect("dashboard")
     return render(request, "budget/form.html", {"form": form, "title": "Add " + kind})
 
@@ -235,3 +246,59 @@ def assign_categories(request):
     return render(
         request, "budget/form.html", {"form": form, "title": "Assign bank categories"}
     )
+
+
+@login_required
+def categories(request):
+    plans = YearPlan.objects.order_by("year")
+    try:
+        year = int(request.GET.get("year", date.today().year))
+        if not 2000 <= year <= 2100:
+            year = date.today().year
+    except ValueError:
+        year = date.today().year
+    plan = plans.filter(year=year).first()
+    schedules = (
+        {
+            schedule.category_id: schedule
+            for schedule in plan.category_schedules.select_related("year_plan")
+        }
+        if plan
+        else {}
+    )
+    rows = [
+        {"category": category, "schedule": schedules.get(category.pk)}
+        for category in Category.objects.order_by("name")
+    ]
+    return render(
+        request,
+        "budget/categories.html",
+        {"rows": rows, "plans": plans, "plan": plan, "year": year},
+    )
+
+
+@login_required
+@require_http_methods(["GET", "POST"])
+def edit_category(request, pk):
+    category = get_object_or_404(Category, pk=pk)
+    try:
+        year = int(request.GET.get("year", date.today().year))
+        if not 2000 <= year <= 2100:
+            year = date.today().year
+    except ValueError:
+        year = date.today().year
+    plan = YearPlan.objects.filter(year=year).first()
+    form = CategoryForm(
+        request.POST if request.method == "POST" else None,
+        instance=category,
+        initial={"year_plan": plan},
+    )
+    if request.method == "POST" and form.is_valid():
+        with transaction.atomic():
+            form.save()
+        messages.success(
+            request,
+            "Category and yearly schedule saved. Existing transactions are unchanged.",
+        )
+        return redirect(f"/categories/?year={form.cleaned_data['year_plan'].year}")
+    return render(request, "budget/form.html", {"form": form, "title": "Edit category"})

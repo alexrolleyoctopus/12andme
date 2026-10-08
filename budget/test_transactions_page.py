@@ -71,7 +71,7 @@ class TransactionsPageTests(TestCase):
         response = self.client.get("/transactions/?year=2026&month=7")
         self.assertEqual(response.context["month"], date(2026, 7, 1))
         self.assertContains(response, 'class="month-grid"')
-        self.assertContains(response, 'name="month"', count=12)
+        self.assertContains(response, '<button name="month"', count=12)
         self.assertNotContains(response, 'type="month"')
 
     def test_home_pagination_does_not_change_totals(self):
@@ -86,7 +86,7 @@ class TransactionsPageTests(TestCase):
 
     def test_empty_invalid_and_year_boundary_months(self):
         self.assertContains(
-            self.client.get("/transactions/?month=2027-01"), "No transactions"
+            self.client.get("/transactions/?month=2027-01"), "No transactions match"
         )
         self.assertContains(
             self.client.get("/transactions/?month=2027-01"), "?month=2026-12"
@@ -109,3 +109,52 @@ class TransactionsPageTests(TestCase):
             ).status_code,
             403,
         )
+
+    def test_uncategorised_filter_ignores_zero_allocations(self):
+        from .models import Allocation
+
+        entries = list(Entry.objects.filter(date__month=7)[:2])
+        Allocation.objects.create(
+            entry=entries[0], category=self.category, amount_cents=100
+        )
+        Allocation.objects.create(
+            entry=entries[1], category=self.category, amount_cents=0, original_cents=100
+        )
+        response = self.client.get("/transactions/?month=2026-07&uncategorised=1")
+        ids = [row["entry"].pk for row in response.context["rows"]]
+        self.assertNotIn(entries[0].pk, ids)
+        self.assertIn(entries[1].pk, ids)
+        self.assertContains(response, "&amp;uncategorised=1")
+        response = self.client.post(
+            "/transactions/?month=2026-07&uncategorised=1",
+            {f"entry_{entries[1].pk}-category": self.category.pk},
+        )
+        self.assertEqual(response.url, "/transactions/?month=2026-07&uncategorised=1")
+
+    def test_income_and_savings_change_earnings_not_cash(self):
+        from .services import report
+
+        self.august.kind = "income"
+        self.august.income_month = date(2026, 9, 1)
+        self.august.save()
+        key = f"entry_{self.august.pk}-receipt_type"
+        response = self.client.post("/transactions/?month=2026-08", {key: "savings_in"})
+        self.assertEqual(response.status_code, 302)
+        self.august.refresh_from_db()
+        self.assertEqual(self.august.kind, "savings_in")
+        self.assertIsNone(self.august.income_month)
+        months, _, _ = report(YearPlan.objects.get(year=2026))
+        self.assertEqual(months[7]["incoming"], 1)
+        self.assertEqual(months[7]["spending_net"], 0)
+        self.client.post("/transactions/?month=2026-08", {key: "income"})
+        months, _, _ = report(YearPlan.objects.get(year=2026))
+        self.assertEqual(months[7]["incoming"], 1)
+        self.assertEqual(months[7]["spending_net"], 1)
+
+    def test_receipt_selector_cannot_reverse_expense(self):
+        self.client.post(
+            "/transactions/?month=2026-08",
+            {f"entry_{self.august.pk}-receipt_type": "savings_in"},
+        )
+        self.august.refresh_from_db()
+        self.assertEqual(self.august.kind, "expense")

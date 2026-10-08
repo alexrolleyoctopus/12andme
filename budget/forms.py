@@ -322,3 +322,32 @@ class TransactionCategoryForm(forms.Form):
         if created and not entry.actual:
             allocation.original_cents = 0
             allocation.save()
+
+
+class TransactionReviewForm(TransactionCategoryForm):
+    """Classify incoming money without reversing an outgoing transaction."""
+
+    receipt_type = forms.ChoiceField(
+        required=False,
+        choices=[
+            ("", "Keep current type"),
+            ("income", "Income"),
+            ("savings_in", "Transfer from savings"),
+        ],
+        label="Incoming money",
+    )
+
+    def __init__(self, *args, entry, **kwargs):
+        super().__init__(*args, **kwargs)
+        if entry.kind not in ("income", "savings_in"):
+            del self.fields["receipt_type"]
+
+    def save(self, entry):
+        if self.cleaned_data.get("category"):
+            super().save(entry)
+        kind = self.cleaned_data.get("receipt_type")
+        if kind:
+            entry.kind = kind
+            if kind != "income":
+                entry.income_month = None
+            entry.save()

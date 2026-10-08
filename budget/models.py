@@ -130,6 +130,7 @@ class CategorySchedule(models.Model):
 class Entry(models.Model):
     KINDS = [
         ("income", "Income"),
+        ("savings_in", "Transfer from savings"),
         ("expense", "Expense"),
         ("refund", "Refund"),
         ("card_payment", "Card payment — source needs review"),
@@ -147,7 +148,7 @@ class Entry(models.Model):
         Account,
         on_delete=models.PROTECT,
         related_name="entries",
-        help_text="Receiving account for income; paying account otherwise",
+        help_text="Receiving account for income or savings transfers; paying account otherwise",
     )
     destination = models.ForeignKey(
         Account,

@@ -18,6 +18,7 @@ from .forms import (
     ImportForm,
     AssignmentForm,
     TransactionCategoryForm,
+    TransactionReviewForm,
 )
 from .imports import read_rows, save_rows
 from .services import report
@@ -174,8 +175,8 @@ def match_entry(request, pk):
         )
     else:
         allowed_kinds = (
-            ["income"]
-            if imported.kind == "income"
+            ["income", "savings_in"]
+            if imported.kind in ("income", "savings_in")
             else ["refund"] if imported.kind == "refund" else ["expense", "transfer"]
         )
         candidates = Entry.objects.filter(
@@ -366,6 +367,9 @@ def transactions(request):
         .prefetch_related("allocations__category")
         .order_by("-date", "-pk")
     )
+    uncategorised = request.GET.get("uncategorised") == "1"
+    if uncategorised:
+        entries = entries.exclude(allocations__amount_cents__gt=0)
     rows = []
     changes = []
     valid = True
@@ -374,8 +378,10 @@ def transactions(request):
         initial = (
             {"category": allocations[0].category_id} if len(allocations) == 1 else {}
         )
-        form = TransactionCategoryForm(
+        initial["receipt_type"] = entry.kind
+        form = TransactionReviewForm(
             request.POST if request.method == "POST" else None,
+            entry=entry,
             initial=initial,
             prefix=f"entry_{entry.pk}",
         )
@@ -384,17 +390,24 @@ def transactions(request):
         if request.method == "POST":
             if not form.is_valid():
                 valid = False
-            elif form.cleaned_data["category"]:
+            else:
                 category = form.cleaned_data["category"]
-                if len(allocations) != 1 or allocations[0].category_id != category.pk:
+                kind = form.cleaned_data.get("receipt_type")
+                category_changed = category and (
+                    len(allocations) != 1 or allocations[0].category_id != category.pk
+                )
+                if category_changed or (kind and kind != entry.kind):
                     changes.append((form, entry))
         rows.append({"entry": entry, "allocations": allocations, "form": form})
     if request.method == "POST" and valid:
         with transaction.atomic():
             for form, entry in changes:
                 form.save(entry)
-        messages.success(request, f"Saved {len(changes)} category changes.")
-        return redirect(f"/transactions/?month={selected:%Y-%m}")
+        messages.success(request, f"Saved {len(changes)} transaction changes.")
+        return redirect(
+            f"/transactions/?month={selected:%Y-%m}"
+            + ("&uncategorised=1" if uncategorised else "")
+        )
     previous = (selected.replace(day=1) - timedelta(days=1)).replace(day=1)
     following = date(selected.year + selected.month // 12, selected.month % 12 + 1, 1)
     return render(
@@ -402,6 +415,7 @@ def transactions(request):
         "budget/transactions.html",
         {
             "rows": rows,
+            "uncategorised": uncategorised,
             "month": selected,
             "picker_years": range(2000, 2101),
             "picker_months": [

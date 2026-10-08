@@ -7,6 +7,7 @@
     <details class="month-picker">
         <summary>Choose month · {{ month|date:"F Y" }}</summary>
         <form method="get">
+            {% if uncategorised %}<input type="hidden" name="uncategorised" value="1">{% endif %}
             <label for="picker-year">Year</label>
             <select id="picker-year" name="year">
                 {% for year in picker_years %}<option value="{{ year }}" {% if year == month.year %}selected{% endif %}>{{ year }}</option>{% endfor %}
@@ -20,14 +21,20 @@
     </details>
 </div>
 <nav class="actions" aria-label="Transaction months">
-    {% if previous %}<a href="?month={{ previous|date:'Y-m' }}">← {{ previous|date:"F Y" }}</a>{% endif %}
+    {% if previous %}<a href="?month={{ previous|date:'Y-m' }}{% if uncategorised %}&amp;uncategorised=1{% endif %}">← {{ previous|date:"F Y" }}</a>{% endif %}
     <strong>{{ month|date:"F Y" }} · {{ rows|length }} transactions</strong>
-    {% if following %}<a href="?month={{ following|date:'Y-m' }}">{{ following|date:"F Y" }} →</a>{% endif %}
+    {% if following %}<a href="?month={{ following|date:'Y-m' }}{% if uncategorised %}&amp;uncategorised=1{% endif %}">{{ following|date:"F Y" }} →</a>{% endif %}
 </nav>
+<form method="get" class="actions">
+    <input type="hidden" name="month" value="{{ month|date:'Y-m' }}">
+    <label><input type="checkbox" name="uncategorised" value="1" {% if uncategorised %}checked{% endif %}> Uncategorised only</label>
+    <button>Apply filter</button>
+</form>
+<p class="muted">Incoming bank transfers can be marked as Income or Transfer from savings. Savings transfers increase cash without counting as earnings. For transfers between two tracked accounts, use Edit / split and Internal transfer.</p>
 <p class="muted">Choose categories below, then use Save all to apply your changes. This assigns the full amount and replaces existing splits. Use Edit / split to divide the amount between categories.</p>
-<form method="post" action="?month={{ month|date:'Y-m' }}">
+<form method="post" action="?month={{ month|date:'Y-m' }}{% if uncategorised %}&amp;uncategorised=1{% endif %}">
 {% csrf_token %}
-<div class="actions"><button type="submit">Save all</button><span>Save category changes for {{ month|date:"F Y" }}. Blank selections keep existing assignments.</span></div>
+<div class="actions"><button type="submit">Save all</button><span>Save transaction changes for {{ month|date:"F Y" }}. Blank selections keep existing assignments.</span></div>
 <section class="panel">
 <div class="tablewrap"><table class="transactions-table">
 <thead><tr><th>Date</th><th>Transaction</th><th>Account</th><th>Amount</th><th>Current categories</th><th>Assign category</th></tr></thead>
@@ -46,10 +53,15 @@
         {{ row.form.category.errors }}
         <label for="{{ row.form.category.id_for_label }}">Category for {{ row.entry.description }}</label>
         {{ row.form.category }}
+        {% if row.form.receipt_type %}
+            {{ row.form.receipt_type.errors }}
+            <label for="{{ row.form.receipt_type.id_for_label }}">Incoming money</label>
+            {{ row.form.receipt_type }}
+        {% endif %}
     </div>
     <a class="transaction-edit" href="/entry/{{ row.entry.pk }}/edit/">Edit / split</a></td>
 </tr>
-{% empty %}<tr><td colspan="6">No transactions this month. Choose another month or <a href="/import/">import a CSV</a>.</td></tr>{% endfor %}
+{% empty %}<tr><td colspan="6">No transactions match this month and filter. Choose another month or <a href="/import/">import a CSV</a>.</td></tr>{% endfor %}
 </tbody>
 </table></div>
 </section>

@@ -96,7 +96,7 @@ def monthly_cash(plan, entries, effective_amounts, income_entries=None):
             if entry.kind == "refund":
                 spent -= amount
             if entry.account.primary:
-                if entry.kind in ("income", "refund"):
+                if entry.kind in ("income", "refund", "savings_in"):
                     incoming += amount
                 elif entry.kind != "card_payment":
                     outgoing += amount

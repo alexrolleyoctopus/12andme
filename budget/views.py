@@ -9,7 +9,7 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
 from django.db import transaction
 from django.core.paginator import Paginator
-from .models import YearPlan, Entry, Allocation, Category
+from .models import YearPlan, Entry, Allocation, Category, Account
 from .forms import (
     AccountForm,
     CategoryForm,
@@ -138,6 +138,12 @@ def import_csv(request):
 @require_http_methods(["GET", "POST"])
 def edit_entry(request, pk):
     entry = get_object_or_404(Entry, pk=pk)
+    if entry.matched_transfer_id or hasattr(entry, "card_receipt"):
+        messages.error(
+            request,
+            "This payment is matched to its bank/card counterpart and cannot be edited here.",
+        )
+        return redirect(f"/transactions/?month={entry.date:%Y-%m}")
     initial = {
         "amount": Decimal(entry.amount_cents) / 100,
         "splits": "\n".join(
@@ -185,7 +191,11 @@ def match_entry(request, pk):
             date__year=imported.date.year,
             kind__in=allowed_kinds,
         )
-    if imported.original_cents is not None:
+    if (
+        imported.original_cents is not None
+        or imported.matched_transfer_id
+        or hasattr(imported, "card_receipt")
+    ):
         messages.error(request, "This transaction has already been matched to a plan.")
         return redirect("dashboard")
     if request.method == "POST":
@@ -396,7 +406,18 @@ def transactions(request):
                 category_changed = category and (
                     len(allocations) != 1 or allocations[0].category_id != category.pk
                 )
-                if category_changed or (kind and kind != entry.kind):
+                destination = form.cleaned_data.get("card_destination")
+                if (
+                    category_changed
+                    or (kind and kind != entry.kind)
+                    or (
+                        destination
+                        and (
+                            entry.kind != "transfer"
+                            or entry.destination_id != destination.pk
+                        )
+                    )
+                ):
                     changes.append((form, entry))
         rows.append({"entry": entry, "allocations": allocations, "form": form})
     if request.method == "POST" and valid:
@@ -424,4 +445,69 @@ def transactions(request):
             "previous": previous if previous.year >= 2000 else None,
             "following": following if following.year <= 2100 else None,
         },
+    )
+
+
+@login_required
+@require_http_methods(["GET", "POST"])
+def accounts(request):
+    return render(
+        request, "budget/accounts.html", {"accounts": Account.objects.order_by("name")}
+    )
+
+
+@login_required
+@require_http_methods(["GET", "POST"])
+def edit_account(request, pk):
+    account = get_object_or_404(Account, pk=pk)
+    form = AccountForm(
+        request.POST if request.method == "POST" else None, instance=account
+    )
+    if request.method == "POST" and form.is_valid():
+        form.save()
+        return redirect("accounts")
+    return render(request, "budget/form.html", {"form": form, "title": "Edit account"})
+
+
+@login_required
+@require_http_methods(["GET", "POST"])
+def match_card_payment(request, pk):
+    """Link both bank records; retain both import IDs for safe reimports."""
+    with transaction.atomic():
+        receipt = get_object_or_404(
+            Entry.objects.select_for_update(),
+            pk=pk,
+            actual=True,
+            kind="card_payment",
+            account__account_type="credit_card",
+            matched_transfer__isnull=True,
+        )
+        candidates = (
+            Entry.objects.filter(
+                actual=True,
+                kind="transfer",
+                destination=receipt.account,
+                amount_cents=receipt.amount_cents,
+                card_receipt__isnull=True,
+            )
+            .exclude(account=receipt.account)
+            .order_by("-date", "-pk")
+        )
+        if request.method == "POST":
+            try:
+                transfer_id = int(request.POST.get("transfer", ""))
+            except ValueError:
+                transfer_id = 0
+            outgoing = get_object_or_404(candidates.select_for_update(), pk=transfer_id)
+            receipt.matched_transfer = outgoing
+            receipt.save(update_fields=["matched_transfer"])
+            messages.success(
+                request,
+                "Card payment matched. The bank date and both import records are preserved.",
+            )
+            return redirect(f"/transactions/?month={receipt.date:%Y-%m}")
+    return render(
+        request,
+        "budget/match_card_payment.html",
+        {"entry": receipt, "candidates": candidates},
     )

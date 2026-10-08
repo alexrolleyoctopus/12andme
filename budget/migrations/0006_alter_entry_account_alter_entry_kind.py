@@ -7,18 +7,33 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('budget', '0005_entry_income_month'),
+        ("budget", "0005_entry_income_month"),
     ]
 
     operations = [
         migrations.AlterField(
-            model_name='entry',
-            name='account',
-            field=models.ForeignKey(help_text='Receiving account for income or savings transfers; paying account otherwise', on_delete=django.db.models.deletion.PROTECT, related_name='entries', to='budget.account'),
+            model_name="entry",
+            name="account",
+            field=models.ForeignKey(
+                help_text="Receiving account for income or savings transfers; paying account otherwise",
+                on_delete=django.db.models.deletion.PROTECT,
+                related_name="entries",
+                to="budget.account",
+            ),
         ),
         migrations.AlterField(
-            model_name='entry',
-            name='kind',
-            field=models.CharField(choices=[('income', 'Income'), ('savings_in', 'Transfer from savings'), ('expense', 'Expense'), ('refund', 'Refund'), ('card_payment', 'Card payment — source needs review'), ('transfer', 'Internal transfer')], max_length=20),
+            model_name="entry",
+            name="kind",
+            field=models.CharField(
+                choices=[
+                    ("income", "Income"),
+                    ("savings_in", "Transfer from savings"),
+                    ("expense", "Expense"),
+                    ("refund", "Refund"),
+                    ("card_payment", "Card payment — source needs review"),
+                    ("transfer", "Internal transfer"),
+                ],
+                max_length=20,
+            ),
         ),
     ]

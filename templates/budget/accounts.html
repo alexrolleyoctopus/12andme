@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Accounts</h1>
+<p>Set each account's type to identify savings and credit cards. The primary account is used for cash on hand.</p>
+<p><a class="button" href="/add/account/">Add account</a></p>
+<section class="panel"><table>
+<thead><tr><th>Account</th><th>Type</th><th>Primary</th><th></th></tr></thead>
+<tbody>{% for account in accounts %}<tr><td>{{ account.name }}</td><td>{{ account.get_account_type_display }}</td><td>{{ account.primary|yesno:"Yes,No" }}</td><td><a href="/account/{{ account.pk }}/edit/">Edit</a></td></tr>{% endfor %}</tbody>
+</table></section>
+{% endblock %}

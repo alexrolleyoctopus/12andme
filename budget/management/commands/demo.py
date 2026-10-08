@@ -20,7 +20,7 @@ class Command(BaseCommand):
             raise CommandError("Demo requires an empty budget database.")
         year = date.today().year
         primary = Account.objects.create(name="Everyday account", primary=True)
-        card = Account.objects.create(name="Credit card")
+        card = Account.objects.create(name="Credit card", account_type="credit_card")
         food = Category.objects.create(name="Food")
         fuel = Category.objects.create(name="Fuel")
         registration = Category.objects.create(name="Car registration")

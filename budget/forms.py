@@ -10,7 +10,7 @@ from .models import Account, Category, YearPlan, Entry, Allocation, CategorySche
 class AccountForm(forms.ModelForm):
     class Meta:
         model = Account
-        fields = ["name", "primary"]
+        fields = ["name", "account_type", "primary"]
 
 
 class CategoryForm(forms.ModelForm):
@@ -339,12 +339,40 @@ class TransactionReviewForm(TransactionCategoryForm):
 
     def __init__(self, *args, entry, **kwargs):
         super().__init__(*args, **kwargs)
-        if entry.kind not in ("income", "savings_in"):
+        if (
+            entry.account.account_type == "credit_card"
+            and entry.kind in ("income", "card_payment")
+            and not entry.matched_transfer_id
+        ):
+            self.fields["receipt_type"].choices = [
+                ("", "Keep current type"),
+                ("card_payment", "Incoming credit-card payment"),
+            ]
+        elif entry.kind not in ("income", "savings_in") or entry.matched_transfer_id:
             del self.fields["receipt_type"]
+        if (
+            not hasattr(entry, "card_receipt")
+            and entry.kind in ("expense", "transfer")
+            and entry.account.account_type != "credit_card"
+        ):
+            self.fields["card_destination"] = forms.ModelChoiceField(
+                queryset=Account.objects.filter(account_type="credit_card").exclude(
+                    pk=entry.account_id
+                ),
+                required=False,
+                label="Transfer to credit card",
+                empty_label="Keep current transfer / spending",
+            )
 
     def save(self, entry):
         if self.cleaned_data.get("category"):
             super().save(entry)
+        destination = self.cleaned_data.get("card_destination")
+        if destination:
+            entry.kind = "transfer"
+            entry.destination = destination
+            entry.income_month = None
+            entry.save()
         kind = self.cleaned_data.get("receipt_type")
         if kind:
             entry.kind = kind

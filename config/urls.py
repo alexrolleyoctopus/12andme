@@ -4,6 +4,9 @@ from django.contrib.auth.views import LoginView, LogoutView
 from budget import views
 
 urlpatterns = [
+    path("accounts/", views.accounts, name="accounts"),
+    path("account/<int:pk>/edit/", views.edit_account),
+    path("entry/<int:pk>/match-card/", views.match_card_payment),
     path("transactions/", views.transactions, name="transactions"),
     path(
         "entry/<int:pk>/category/", views.assign_transaction, name="assign_transaction"

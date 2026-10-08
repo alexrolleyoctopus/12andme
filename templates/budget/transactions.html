@@ -53,12 +53,22 @@
         {{ row.form.category.errors }}
         <label for="{{ row.form.category.id_for_label }}">Category for {{ row.entry.description }}</label>
         {{ row.form.category }}
+        {% if row.form.card_destination %}
+            {{ row.form.card_destination.errors }}
+            <label for="{{ row.form.card_destination.id_for_label }}">Transfer to credit card</label>
+            {{ row.form.card_destination }}
+        {% endif %}
         {% if row.form.receipt_type %}
             {{ row.form.receipt_type.errors }}
             <label for="{{ row.form.receipt_type.id_for_label }}">Incoming money</label>
             {{ row.form.receipt_type }}
         {% endif %}
     </div>
+    {% if row.entry.matched_transfer_id %}
+        <small>Matched to bank payment</small>
+    {% elif row.entry.kind == "card_payment" and row.entry.account.account_type == "credit_card" %}
+        <a class="transaction-edit" href="/entry/{{ row.entry.pk }}/match-card/">Match bank payment</a>
+    {% endif %}
     <a class="transaction-edit" href="/entry/{{ row.entry.pk }}/edit/">Edit / split</a></td>
 </tr>
 {% empty %}<tr><td colspan="6">No transactions match this month and filter. Choose another month or <a href="/import/">import a CSV</a>.</td></tr>{% endfor %}

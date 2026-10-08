@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% load money %}
+{% block content %}
+<section class="formcard">
+<h1>Match bank payment</h1>
+<p>{{ entry.date }} · {{ entry.account }} · {{ entry.description }} · {{ entry.amount_cents|money }}</p>
+<p>Select the outgoing bank transfer for this card receipt. Both records are kept, but only the outgoing bank transfer affects cash. Neither counts as spending.</p>
+{% if candidates %}
+<form method="post">
+{% csrf_token %}
+<label for="transfer">Bank payment with the same amount and card destination</label>
+<select name="transfer" id="transfer" required>{% for candidate in candidates %}<option value="{{ candidate.pk }}">{{ candidate.date }} · {{ candidate.account }} · {{ candidate.description }} · {{ candidate.amount_cents|money }}</option>{% endfor %}</select>
+<button>Match bank payment</button>
+</form>
+{% else %}<p>No unmatched bank payments found. On Transactions, mark the outgoing bank transaction as a transfer to this credit card and save it first.</p>{% endif %}
+</section>
+{% endblock %}

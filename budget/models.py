@@ -12,6 +12,16 @@ from django.core.validators import MinValueValidator, MaxValueValidator
 
 
 class Account(models.Model):
+    account_type = models.CharField(
+        max_length=12,
+        default="transaction",
+        choices=[
+            ("transaction", "Transaction"),
+            ("savings", "Savings"),
+            ("credit_card", "Credit Card"),
+        ],
+    )
+
     name = models.CharField(max_length=100, unique=True)
     primary = models.BooleanField(default=False)
 
@@ -25,6 +35,8 @@ class Account(models.Model):
         ]
 
     def clean(self):
+        if self.primary and self.account_type == "credit_card":
+            raise ValidationError("The primary cash account cannot be a credit card.")
         if (
             self.primary
             and Account.objects.filter(primary=True).exclude(pk=self.pk).exists()
@@ -136,6 +148,14 @@ class Entry(models.Model):
         ("card_payment", "Card payment — source needs review"),
         ("transfer", "Internal transfer"),
     ]
+    matched_transfer = models.OneToOneField(
+        "self",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="card_receipt",
+        editable=False,
+    )
     date = models.DateField()
     income_month = models.DateField(
         null=True,

@@ -156,3 +156,11 @@ On Import, optionally check **Set 1 January starting cash from this export** for
 
 
 On **Transactions**, enable **Uncategorised only** to show entries without a positive category allocation. The filter persists across months and Save all. Incoming receipts have an **Income / Transfer from savings** selector: savings receipts increase the receiving account's cash but are not earnings. Changing income to savings removes its income budget month. For a transfer between two tracked accounts, use **Edit / split → Internal transfer** with the paying and receiving accounts instead, and avoid recording the same movement twice.
+
+
+### Credit-card funding and matching
+Use **Accounts → Edit** to choose Transaction, Savings or Credit Card. Existing accounts default to Transaction until you classify them; the primary cash account cannot be a credit card.
+
+On Transactions, select **Transfer to credit card** on the outgoing bank transaction and choose the card, then **Save all**. This converts spending into an internal transfer: primary cash falls on the bank payment date, while spending remains captured by individual card purchases.
+
+On the credit-card receipt, use **Incoming credit-card payment** if needed and Save all, then **Match bank payment**. Choose the actual outgoing transfer with the same amount and card destination. Both records and their import identities are retained, so reimporting them does not add another movement. The receipt never counts as earnings or spending. Matches can cross month/year boundaries; select the same real payment. Matched transactions cannot be edited through the transaction edit page. Existing planned-payment matching remains available separately on the home page.

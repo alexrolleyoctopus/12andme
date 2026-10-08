@@ -3,12 +3,12 @@
 import csv
 import hashlib
 import io
-from datetime import date
+from datetime import date, datetime
 from collections import Counter
 import json
 from decimal import Decimal, InvalidOperation
 from django.db import transaction
-from .models import Entry
+from .models import Entry, YearPlan
 
 MAX_BYTES = 2 * 1024 * 1024
 MAX_ROWS = 5000
@@ -111,6 +111,65 @@ def normalise_card_row(row, occurrences):
     }
 
 
+def normalise_bank_export(text):
+    """Read headerless date, amount, description, balance bank exports.
+
+    The running balance helps distinguish otherwise identical transactions.
+    It also supports explicitly setting opening cash from an export starting on 1 January.
+    """
+    balances = []
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["id", "date", "description", "amount"])
+    occurrences = Counter()
+    for number, cells in enumerate(csv.reader(io.StringIO(text), strict=True), start=1):
+        if not cells:
+            continue
+        if number > MAX_ROWS:
+            raise ValueError("Import at most 5,000 transactions at a time.")
+        if len(cells) != 4:
+            raise ValueError(
+                f"Row {number}: expected date, amount, description and balance."
+            )
+        raw_date, raw_amount, description, raw_balance = cells
+        try:
+            payment_date = datetime.strptime(raw_date.strip(), "%d/%m/%Y").date()
+            if len(raw_amount.strip()) > 30 or len(raw_balance.strip()) > 30:
+                raise ValueError()
+            amount = Decimal(raw_amount.strip())
+            balance = Decimal(raw_balance.strip())
+            for value in (amount, balance):
+                if not value.is_finite() or abs(value) > MAX_AMOUNT:
+                    raise ValueError()
+                if value != value.quantize(Decimal("0.01")):
+                    raise ValueError()
+        except (ValueError, InvalidOperation):
+            raise ValueError(
+                f"Row {number}: invalid bank date, amount or balance."
+            ) from None
+        identity = json.dumps(
+            [
+                str(payment_date),
+                str(amount.normalize()),
+                description.strip(),
+                str(balance.normalize()),
+            ],
+            ensure_ascii=False,
+        )
+        balances.append(balance)
+        fingerprint = hashlib.sha256(identity.encode()).hexdigest()
+        occurrences[fingerprint] += 1
+        writer.writerow(
+            [
+                f"bank-v1:{fingerprint}:{occurrences[fingerprint]}",
+                payment_date.isoformat(),
+                description,
+                raw_amount,
+            ]
+        )
+    return output.getvalue(), balances
+
+
 def read_rows(upload):
     if upload.size > MAX_BYTES:
         raise ValueError("Maximum CSV size is 2 MB.")
@@ -120,14 +179,19 @@ def read_rows(upload):
         raise ValueError("Save the CSV using UTF-8 encoding.") from None
     if len(text.encode("utf-8")) > MAX_BYTES:
         raise ValueError("Maximum CSV size is 2 MB.")
-    reader = csv.DictReader(io.StringIO(text), strict=True)
     try:
+        balances = []
+        first = next(csv.reader(io.StringIO(text), strict=True), [])
+        # Headerless bank exports start with a day/month/year date.
+        if first and "/" in first[0] and first[0].strip()[:1].isdigit():
+            text, balances = normalise_bank_export(text)
+        reader = csv.DictReader(io.StringIO(text), strict=True)
         headers = reader.fieldnames or []
         is_card = CARD_COLUMNS.issubset(headers)
         required = CARD_COLUMNS if is_card else REQUIRED_COLUMNS
         if not required.issubset(headers) or len(headers) != len(set(headers)):
             raise ValueError(
-                "Use the supported credit-card export, or unique id,date,description,amount columns."
+                "Use a supported credit-card or headerless bank export, or unique id,date,description,amount columns."
             )
         rows = []
         occurrences = Counter()
@@ -171,6 +235,7 @@ def read_rows(upload):
                 ) from None
             rows.append(
                 {
+                    "balance": balances[len(rows)] if balances else None,
                     "bank_id": bank_id,
                     "date": payment_date,
                     "description": row["description"][:200] or "Imported transaction",
@@ -188,11 +253,20 @@ def read_rows(upload):
 
 
 @transaction.atomic
-def save_rows(account, rows):
+def save_rows(account, rows, set_opening=False):
     if any(row["metadata"] for row in rows) and account.primary:
         raise ValueError(
             "Choose a separate credit-card account for this export, not the primary transaction account."
         )
+    if set_opening:
+        year, opening = opening_from_export(account, rows)
+        plan = YearPlan.objects.filter(year=year).first()
+        if plan is None:
+            raise ValueError(
+                f"Add a budget year for {year} before setting its opening cash."
+            )
+        plan.opening_cents = opening
+        plan.save(update_fields=["opening_cents"])
     added = 0
     for row in rows:
         # A missing processing date is not reliable evidence of settled spending.
@@ -214,3 +288,40 @@ def save_rows(account, rows):
         )
         added += created
     return added
+
+
+def opening_from_export(account, rows):
+    """Require a 1 January start within one year and reconciling balances."""
+    if not account.primary:
+        raise ValueError("Starting cash can only be set for the primary account.")
+    if not rows or any(row.get("balance") is None for row in rows):
+        raise ValueError(
+            "Setting starting cash requires the bank export with running balances."
+        )
+    year = min(row["date"].year for row in rows)
+    if min(row["date"] for row in rows) != date(year, 1, 1) or any(
+        row["date"].year != year for row in rows
+    ):
+        raise ValueError(
+            "To set starting cash, the file must start with a transaction dated 1 January "
+            "and contain only that calendar year. Year-to-date exports are accepted. "
+            "Otherwise leave this option unchecked "
+            "and enter the 1 January balance manually."
+        )
+    # Preserve bank ordering for same-day transactions; accept either file direction.
+    for ordered in (rows, list(reversed(rows))):
+        if all(
+            earlier["date"] <= later["date"]
+            and earlier["balance"] + later["amount"] == later["balance"]
+            for earlier, later in zip(ordered, ordered[1:])
+        ):
+            opening = ordered[0]["balance"] - ordered[0]["amount"]
+            if abs(opening) > MAX_AMOUNT:
+                raise ValueError(
+                    "Calculated starting cash is outside the supported range."
+                )
+            return year, int(opening * 100)
+    raise ValueError(
+        "Running balances do not reconcile. Import without setting starting cash "
+        "or use a complete export in its original bank order."
+    )

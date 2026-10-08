@@ -108,10 +108,21 @@ def import_csv(request):
     if request.method == "POST" and form.is_valid():
         try:
             rows = read_rows(form.cleaned_data["file"])
-            added = save_rows(form.cleaned_data["account"], rows)
+            added = save_rows(
+                form.cleaned_data["account"],
+                rows,
+                set_opening=form.cleaned_data["set_opening"],
+            )
         except ValueError as error:
             form.add_error("file", str(error))
         else:
+            if form.cleaned_data["set_opening"]:
+                year = rows[0]["date"].year
+                plan = YearPlan.objects.get(year=year)
+                messages.success(
+                    request,
+                    f"{year} starting cash set to ${Decimal(plan.opening_cents) / 100:,.2f}.",
+                )
             pending = sum(row["pending"] for row in rows)
             duplicates = len(rows) - added - pending
             messages.success(

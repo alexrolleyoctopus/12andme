@@ -3,14 +3,15 @@
     <section class="formcard">
         <p class="eyebrow">BRING IN YOUR ACTUALS</p>
         <h1>Import transactions</h1>
+        <p>Your transaction-account CSV can also be uploaded unchanged: no header, with date (DD/MM/YYYY), signed amount, description and running balance. Choose the bank account it belongs to. Money in becomes income and money out becomes spending; review transfers, card repayments and reimbursements after importing. Running balances leave your opening cash unchanged unless you select the starting-cash option below.</p>
         <p>Your credit-card export can be uploaded unchanged. Choose the credit-card account below; both cardholders' transactions belong to that account.</p>
         <ul>
             <li>Purchases and fees become spending; refunds reduce spending once assigned.</li>
             <li>Card repayments need review: match them to a planned transfer, or edit them into a transfer with the correct paying account and card destination.</li>
             <li>Rows without a processing date are skipped. Import a later export once they have been processed.</li>
         </ul>
-        <p>After importing, use <a href="/assign/">Assign categories</a> to map a bank category such as Groceries to your own category such as Food. Existing assignments are preserved. Use Edit on a transaction to split it between categories.</p>
-        <p class="notice">This bank export has no transaction IDs. We detect likely duplicates from date, amount, source card, type and description, preserving repeated identical purchases within a file. Unchanged overlapping exports are supported, but bank corrections or partial exports containing identical transactions may need manual review.</p>
+        <p>After importing, use <a href="/transactions/">Transactions</a> to select categories and Save all. For credit-card exports, use <a href="/assign/">Assign categories</a> to map a bank category such as Groceries to your own category such as Food. Existing assignments are preserved. Use Edit on a transaction to split it between categories.</p>
+        <p class="notice">These bank exports have no transaction IDs. For the headerless bank format, duplicate detection uses date, amount, description and running balance. For cards, We detect likely duplicates from date, amount, source card, type and description, preserving repeated identical purchases within a file. Unchanged overlapping exports are supported, but bank corrections or partial exports containing identical transactions may need manual review.</p>
         <details>
             <summary>Other banks: standard CSV format</summary>
             <p>Use UTF-8 with <code>id,date,description,amount</code> columns. Dates use YYYY-MM-DD; money in is positive and money out is negative. IDs must stay the same across exports.</p>

@@ -260,6 +260,12 @@ class EntryForm(forms.ModelForm):
 
 
 class ImportForm(forms.Form):
+    set_opening = forms.BooleanField(
+        required=False,
+        label="Set 1 January starting cash from this export",
+        help_text="Primary account only. Replaces the export year's opening balance. Accepts 1 January through your latest transaction, with consistent running balances and a transaction dated 1 January. Export all transactions from 1 January; leave unchecked for files starting later.",
+    )
+
     account = forms.ModelChoiceField(queryset=Account.objects.all())
     file = forms.FileField(label="CSV file (up to 2 MB)")
 

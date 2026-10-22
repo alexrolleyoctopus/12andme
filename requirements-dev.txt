@@ -1,4 +1,4 @@
 -r requirements.txt
-black==26.10.0
-djlint==1.46.4
+black==26.10.1
+djlint==1.46.6
 pip-audit==2.10.1

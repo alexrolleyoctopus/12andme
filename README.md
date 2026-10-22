@@ -1,10 +1,10 @@
 # 12and.me
 
-A private, single-household budgeting app built with Django 5.2, SQLite and HTML/CSS. Plan January–December, forecast the primary transaction account, and compare category spending with the original budget.
+A private, single-household budgeting app built with Django 6.1, SQLite and HTML/CSS. Plan January–December, forecast the primary transaction account, and compare category spending with the original budget.
 
 ## Start locally
 
-Requires Python 3.10 or newer (3.12 recommended). macOS's built-in Python may be too old.
+Requires Python 3.12 or newer (the Docker image uses Python 3.12). macOS's built-in Python may be too old.
 
 ```sh
 python3 -m venv .venv
@@ -164,3 +164,5 @@ Use **Accounts → Edit** to choose Transaction, Savings or Credit Card. Existin
 On Transactions, select **Transfer to credit card** on the outgoing bank transaction and choose the card, then **Save all**. This converts spending into an internal transfer: primary cash falls on the bank payment date, while spending remains captured by individual card purchases.
 
 On the credit-card receipt, use **Incoming credit-card payment** if needed and Save all, then **Match bank payment**. Choose the actual outgoing transfer with the same amount and card destination. Both records and their import identities are retained, so reimporting them does not add another movement. The receipt never counts as earnings or spending. Matches can cross month/year boundaries; select the same real payment. Matched transactions cannot be edited through the transaction edit page. Existing planned-payment matching remains available separately on the home page.
+
+Dependency review (22 October 2026): Django 6.1.2, Black 26.10.1 and djLint 1.46.6 are pinned in the requirement files. Other direct packages were already current. The local development environment and its indirect dependencies were also refreshed. All 93 tests pass on Python 3.12; pip reports no dependency conflicts, and pip-audit reports no known vulnerabilities in the resolved development/application requirements. Docker builds must be verified on the Linux server.

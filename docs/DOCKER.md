@@ -140,7 +140,7 @@ sudo cp -p data/db.sqlite3 "backups/budget-$(date +%Y%m%d-%H%M%S).sqlite3"
 
 Keep backups private and copy them off the server periodically. Save `.env` securely as well. For disaster recovery, back up Caddy's named volumes using your Docker backup tool; they contain the authority's private key and must be protected like a secret. `backups/` is excluded from Git and the Docker build context.
 
-After the backup, update the code and rebuild:
+After the backup, update the code and rebuild. The October 2026 dependency update upgrades Django to 6.1.2 and requires Python 3.12 or newer. The existing Python 3.12 Docker image remains supported; `build --pull` refreshes its patch release and `pull caddy` refreshes Caddy 2. No application-schema migration was added for this dependency update, but still run `migrate` for any framework or previously pending migrations:
 
 ```sh
 git pull
